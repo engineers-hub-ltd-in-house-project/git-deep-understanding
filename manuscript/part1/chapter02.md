@@ -64,7 +64,7 @@ HEAD         config*      description  hooks/       info/        objects/     re
 
 ```mermaid
 graph TD
-    subgraph .git ディレクトリ
+    subgraph ".git ディレクトリ"
         A(HEAD)
         B(config)
         C(objects)

@@ -89,7 +89,6 @@ graph TD
         C1_a --> C2_a("main")
         C1_a --> C3_a("feature")
         C2_a --> C4_a("Merge Commit")
-        C3_a --> C4_a
     end
 ```
 -   **メリット**: 操作が直感的で安全。歴史の事実（`main`と合流したこと）がマージコミットとして明確に残る。

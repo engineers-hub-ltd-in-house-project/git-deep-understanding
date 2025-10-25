@@ -140,12 +140,12 @@ git commit -m "Third commit on feature"
 
 ```mermaid
 graph TD
-    subgraph Git Directory
+    subgraph "Git Directory"
         HEAD -- "ref: refs/heads/feature" --> FeatureRef("refs/heads/feature")
         MainRef("refs/heads/main")
     end
 
-    subgraph Commits
+    subgraph "Commits"
         C1("c1a2b3d")
         C2("d2b3c4d")
         C3("e3c4d5e")

@@ -63,10 +63,10 @@ Git は、`git add` されたファイルの中身を圧縮し、その内容か
 
 ```mermaid
 graph TD
-    subgraph .git/objects
+    subgraph ".git/objects"
         A("3b/") --> B("18e512dba79e45b16259837ce242b5c0c93a7d")
     end
-    subgraph SHA-1ハッシュ値
+    subgraph "SHA-1ハッシュ値"
         C("3b18e512dba79e45b16259837ce242b5c0c93a7d")
     end
     C -- "最初の2文字" --> A

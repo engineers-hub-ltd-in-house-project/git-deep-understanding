@@ -141,17 +141,17 @@ Update file.txt
 
 ```mermaid
 graph TD
-    subgraph Commits
+    subgraph "Commits"
         CommitA("commit f7e9f39")
         CommitB("commit a1b2c3d")
     end
 
-    subgraph Trees
+    subgraph "Trees"
         TreeA("tree d8329fc")
         TreeB("tree ...")
     end
 
-    subgraph Blobs
+    subgraph "Blobs"
         BlobA("blob ...<br/>'Initial commit'")
         BlobB("blob ...<br/>'Second version'")
     end

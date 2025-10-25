@@ -83,7 +83,7 @@ git diff HEAD
 
 ```mermaid
 graph TD
-    subgraph Comparisons
+    subgraph "Comparisons"
         HEAD -- "git diff --staged" --> Index;
         Index -- "git diff" --> WorkingDir("Working Directory");
         HEAD -- "git diff HEAD" --> WorkingDir;

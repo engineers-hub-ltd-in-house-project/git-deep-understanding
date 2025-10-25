@@ -141,12 +141,12 @@ Untracked files:
 
 ```mermaid
 graph TD
-    subgraph Comparison
+    subgraph "Comparison"
         HEAD -- "1. compare" --> Index;
         Index -- "2. compare" --> WorkingDir("Working Directory");
     end
     
-    subgraph Status Report
+    subgraph "Status Report"
         A("Changes to be committed")
         B("Changes not staged for commit")
     end

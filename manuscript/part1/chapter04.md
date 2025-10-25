@@ -124,15 +124,15 @@ git cat-file -p 5e98585
 
 ```mermaid
 graph TD
-    subgraph プロジェクトルート
+    subgraph "プロジェクトルート"
         RootTree("tree 2684728")
     end
 
-    subgraph src/
+    subgraph "src/"
         SrcTree("tree 5e98585")
     end
 
-    subgraph ファイル
+    subgraph "ファイル"
         ReadmeBlob("blob 3b18e51<br/># My Project")
         MainBlob("blob 1af7d91<br/>fn main() { ... }")
     end
