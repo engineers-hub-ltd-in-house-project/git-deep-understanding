@@ -1,87 +1,43 @@
-# 第22章: インタラクティブリベース
-
-`git rebase`は、ブランチの土台を付け替えるだけでなく、 `--interactive` (または `-i`) オプションを使うことで、コミットの歴史を自在に編集する強力なツールに変身します。これを**インタラクティブリベース**と呼びます。
-
-インタラクティブリベースを使うと、まるでタイムマシンに乗って過去に戻り、歴史を思い通りに修正するような体験ができます。具体的には、以下のような操作が可能です。
-
--   コミットメッセージの修正 (`reword`)
--   複数のコミットを1つにまとめる (`squash`, `fixup`)
--   コミットの順序を入れ替える
--   コミットを削除する (`drop`)
--   コミットの中身を修正する (`edit`)
-
-この章では、これらの操作を実践し、乱雑なコミット履歴を美しく整形するテクニックを学びます。
+# 第 22 章: インタラクティブリベース `-i`
 
 ---
-## 22.1 演習の準備: 整形前の乱雑な歴史
 
-まず、インタラクティブリベースの威力を実感するために、意図的に少し乱雑なコミット履歴を作ります。
+前章で学んだ `git rebase <branch>` は、ブランチの土台を一括で変更するものでした。しかし `rebase` の真の力は、`--interactive` (または `-i`) オプションを付けたときに発揮されます。
 
-```bash
-# 実験用ディレクトリを作成
-mkdir git-interactive-rebase && cd git-interactive-rebase
-git init
+**インタラクティブリベース (`git rebase -i`)** を使うと、ブランチに含まれる一連のコミットを、まるでビデオ編集のように自由自在に操作できます。
 
-# 最初のファイルをコミット
-echo "Feature content" > feature.txt
-git add .
-git commit -m "feat: Start feature development"
+- コミットメッセージを修正する (`reword`)
+- 複数のコミットを一つにまとめる (`squash`, `fixup`)
+- コミットを並べ替える (順番の変更)
+- コミットを削除する (`drop`)
+- コミットを編集して変更内容を追加する (`edit`)
 
-# 作業途中のコミット
-echo "More content" >> feature.txt
-git add .
-git commit -m "wip" # wip = Work In Progress (作業中)
-
-# 機能の一部を追加
-echo "Final touches" >> feature.txt
-git add .
-git commit -m "feat: Add final touches"
-
-# 最初のコミットメッセージにタイポがあったことに気づく
-# (本来なら git commit --amend を使う場面だが、ここでは演習のため新しいコミットとする)
-git commit --allow-empty -m "fix: Correct typo in first commit message"
-
-# 不要だったかもしれない変更
-echo "Temporary change" >> temp.txt
-git add .
-git commit -m "feat: Add temporary file"
-```
-
-`git log --oneline`で現在の歴史を見てみましょう。
-```
-<hash5> feat: Add temporary file
-<hash4> fix: Correct typo in first commit message
-<hash3> feat: Add final touches
-<hash2> wip
-<hash1> feat: Start feature development
-```
-この歴史にはいくつかの問題があります。
--   `wip`のような意味のないコミットメッセージがある。
--   本来一つであるべき機能追加が複数のコミットに分かれている。
--   タイポ修正のためのコミットは、元のコミットに含めるべき。
--   最後の`temporary file`は最終的に不要かもしれない。
-
-この乱雑な歴史を、インタラクティブリベースで整形していきます。
+これにより、他人に見せる前のブランチの歴史を、非常に分かりやすく、論理的に整えることができます。
 
 ---
-## 22.2 インタラクティブリベースの開始
+## 22.1 インタラクティブリベースの開始
 
-インタラクティブリベースは `git rebase -i <commit>` の形で実行します。この`<commit>`には、「**どこからどこまでのコミットを編集したいか**」の**始点（の1つ前）** を指定します。
+インタラクティブリベースは、「どこからどこまでのコミットを操作対象にするか」を指定して開始します。一般的には、「現在のブランチと、分岐元のブランチとの差分」を対象にします。
 
-今回はすべてのコミットを編集対象にしたいので、最初のコミットの親である`HEAD~5`を指定します。
+`feature` ブランチ上で `main` ブランチから分岐して以降のコミットを全て操作したい場合は、以下のように実行します。
+
 ```bash
-git rebase -i HEAD~5
+git rebase -i main
 ```
-このコマンドを実行すると、Gitはテキストエディタを起動し、以下のようなファイルを表示します。
 
+また、`HEAD` から遡って特定の数のコミットを対象にすることもできます。例えば、最新の 3 つのコミットを操作したい場合はこうです。
+```bash
+git rebase -i HEAD~3
 ```
-pick <hash1> feat: Start feature development
-pick <hash2> wip
-pick <hash3> feat: Add final touches
-pick <hash4> fix: Correct typo in first commit message
-pick <hash5> feat: Add temporary file
 
-# Rebase <hash_base>..<hash5> onto <hash_base> (5 commands)
+このコマンドを実行すると、Git はデフォルトのエディタを起動し、操作対象のコミットリストと、実行可能なコマンドのリストを表示します。
+
+```text
+pick f7f3f6d Add feature A
+pick 310154e Add feature B
+pick a5f4a0d Fix typo in feature B
+
+# Rebase 710f0f8..a5f4a0d onto 710f0f8 (3 commands)
 #
 # Commands:
 # p, pick <commit> = use commit
@@ -103,58 +59,105 @@ pick <hash5> feat: Add temporary file
 # However, if you remove everything, the rebase will be aborted.
 #
 ```
-上半分には編集対象のコミットが**古い順に**リストアップされ、下半分には利用可能なコマンドの説明が書かれています。Gitはこのリストを上から順番に処理していきます。
+
+この画面がインタラクティブリベースの中心です。
+- 上半分には、古い順にコミットがリストアップされています。
+- 各行の先頭にある `pick` が、そのコミットに対して実行される**コマンド**です。
+- 下半分には、利用可能なコマンドの解説が書かれています。
+
+私たちは、この**テキストファイルを編集して保存する**ことで、Git にこれから実行してほしい歴史の書き換えシナリオを指示します。
 
 ---
-## 22.3 歴史の編集
+## 22.2 一般的なユースケース
 
-このリストを編集して、私たちの望む歴史の形をGitに指示します。今回は以下のように整形したいと考えます。
-1.  最初のコミットのメッセージを修正する (`reword`)
-2.  `wip`と`feat: Add final touches`を最初のコミットと一つにまとめる (`squash`)
-3.  タイポ修正のコミットは、内容もメッセージも不要なので、`fixup`で完全に溶け込ませる。
-4.  `temporary file`のコミットは完全に削除する (`drop`)
+ここでは、インタラクティブリベースの一般的な使い方をいくつか見ていきましょう。
 
-この計画に従って、エディタでファイルを以下のように書き換えます。
+### a) コミットメッセージの修正 (`reword`)
 
+`Add feature A` のコミットメッセージを、もっと分かりやすく `Add login feature` に変更したいとします。
+`f7f3f6d` の行の `pick` を `reword` (または `r`) に書き換えて保存します。
+
+```text
+reword f7f3f6d Add feature A
+pick 310154e Add feature B
+pick a5f4a0d Fix typo in feature B
 ```
-reword <hash1> feat: Start feature development
-squash <hash2> wip
-squash <hash3> feat: Add final touches
-fixup <hash4> fix: Correct typo in first commit message
-drop <hash5> feat: Add temporary file
+
+ファイルを保存して閉じると、Git はすぐに新しいエディタを開き、コミットメッセージの編集を促します。
+メッセージを修正して保存すれば、そのコミットのメッセージが新しくなります。
+
+### b) コミットの結合 (`squash`, `fixup`)
+
+`Add feature B` と `Fix typo in feature B` の 2 つは、別々のコミットにする必要はありません。一つの「feature B の追加」コミットにまとめたいです。
+この場合、まとめられる側のコミット (`a5f4a0d`) のコマンドを `squash` (または `s`) に変更します。
+
+```text
+pick f7f3f6d Add feature A
+pick 310154e Add feature B
+squash a5f4a0d Fix typo in feature B
 ```
-ファイルを保存してエディタを閉じると、リベースのプロセスが始まります。Gitは書き換えた指示書を上から順番に実行していきます。
 
-1.  **`reword <hash1>`**: 最初のコミットで`reword`を指定したので、Gitはコミットメッセージを編集するためのエディタを開きます。メッセージを「feat: Implement the main feature」のように分かりやすく修正して保存します。
-2.  **`squash <hash2>` & `squash <hash3>`**: 次に`squash`が2つ連続しています。Gitはこれら3つのコミット（元の`hash1`, `hash2`, `hash3`）を一つにまとめる処理を行い、統合後の新しいコミットメッセージを編集するためのエディタを開きます。3つのコミットメッセージが結合された状態で表示されるので、不要な行を削除し、最終的なメッセージを一つにまとめて保存します。
-3.  **`fixup <hash4>`**: `fixup`は`squash`と似ていますが、このコミットのメッセージは完全に破棄されます。Gitは自動的にこのコミットを前のコミットに溶け込ませます。
-4.  **`drop <hash5>`**: `drop`を指定したので、このコミットは完全に削除されます。
+`squash` は、そのコミットを**直前のコミットに**統合します。
+ファイルを保存すると、Git は新しいエディタを開き、結合後の新しいコミットメッセージをどうするか聞いてきます。デフォルトでは両方のメッセージが含まれているので、これを分かりやすく一つにまとめます。
 
-すべての処理が完了すると、リベース成功のメッセージが表示されます。
+もし、タイポ修正のコミットメッセージ (`Fix typo in feature B`) が不要で、単に `Add feature B` のメッセージだけを残したい場合は、`squash` の代わりに `fixup` (または `f`) を使います。`fixup` は、コミットを統合し、かつそのコミットのメッセージを破棄するコマンドです。この場合、メッセージ編集のステップはスキップされます。
+
+### c) コミットの削除 (`drop`)
+
+もし `Add feature A` のコミットがやっぱり不要になった場合、その行全体を**削除**するか、コマンドを `drop` (または `d`) に変更します。
+
+```text
+# f7f3f6d の行を削除
+pick 310154e Add feature B
+pick a5f4a0d Fix typo in feature B
+```
+または
+```text
+drop f7f3f6d Add feature A
+pick 310154e Add feature B
+pick a5f4a0d Fix typo in feature B
+```
+
+ファイルを保存すれば、そのコミットは歴史から消え去ります。
+
+### d) コミットの順序変更
+
+`Add feature B` を `Add feature A` より先に適用した歴史にしたい場合、単純に行の順序を入れ替えるだけです。
+
+```text
+pick 310154e Add feature B
+pick a5f4a0d Fix typo in feature B
+pick f7f3f6d Add feature A
+```
+ファイルを保存すれば、Git は上から順にコミットを再適用し、歴史を並べ替えてくれます (ただし、互いに依存関係がなく、コンフリクトが発生しない場合に限ります)。
 
 ---
-## 22.4 整形後の歴史
+## 22.3 Rebase 中のコンフリクト
 
-`git log --oneline`で最終的な歴史を確認してみましょう。
+コミットを並べ替えたり、内容を編集したりすると、マージの時と同じように**コンフリクト**が発生することがあります。
+例えば、後のコミットが、前のコミットで変更した箇所をさらに変更している場合などです。
+
+Rebase 中にコンフリクトが起きると、プロセスは一時停止し、コンフリクトの解決を求められます。
 ```
-<new_hash> feat: Implement the main feature
+CONFLICT (content): Merge conflict in file.txt
+error: could not apply a5f4a0d... Fix typo in feature B
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: "git add <conflicted_files>", then run "git rebase --continue".
+hint: You can instead skip this commit with "git rebase --skip".
+hint: To abort and get back to the state before "git rebase", run "git rebase --abort".
 ```
-あれだけ乱雑だった5つのコミットが、意味のある1つの美しいコミットに生まれ変わりました。これこそがインタラクティブリベースの力です。
+やるべきことは Merge の時と同じです。
+1.  コンフリクトマーカー (`<<<<<<<`, `=======`, `>>>>>>>`) が入ったファイルを修正する。
+2.  `git add <file>` で、解決したことを Git に伝える。
+3.  `git rebase --continue` を実行して、rebase プロセスを再開する。
+
+もし解決が難しい場合は `git rebase --abort` で、rebase を開始する前の状態に安全に戻ることができます。
 
 ---
 **まとめ**
 
-この章では、インタラクティブリベースを使ってコミットの歴史を自在に編集する方法を学びました。
-
--   `git rebase -i <commit>`で、指定したコミット以降の歴史を編集対象とするインタラクティブモードを開始できる。
--   表示された編集画面で、`pick`, `reword`, `squash`, `fixup`, `drop`などのコマンドを指示することで、歴史を思い通りに再構築できる。
--   コミットの並べ替えも、編集画面の行を入れ替えるだけで可能。
--   インタラクティブリベースは、Pull Requestを出す前にローカルのコミット履歴を整理し、レビューしやすい形にするための非常に強力なテクニックである。
-
-もちろん、これも**歴史を書き換える**操作です。前章で学んだ黄金律「共有されたブランチはリベースするな」は、インタラクティブリベースにも同様に適用されます。
-
-最後に演習用ディレクトリを削除しておきましょう。
-```bash
-cd ..
-rm -rf git-interactive-rebase
-```
+- `git rebase -i` (インタラクティブリベース) は、コミットの歴史を対話的に編集するための強力なツールである。
+- コマンドリスト (テキストファイル) を編集することで、コミットメッセージの修正 (`reword`)、コミットの結合 (`squash`, `fixup`)、削除 (`drop`)、順序変更などが可能。
+- 複数の細かい "作業中" コミットを、一つの論理的な単位にまとめることで、プルリクエスト前のブランチを綺麗に整えることができる。
+- Rebase 中にコンフリクトが発生した場合は、ファイルを修正し、`git add` してから `git rebase --continue` で続行する。
+- Rebase は歴史を書き換えるため、前章で学んだ黄金律 (公共のブランチは rebase しない) はここでも同様に適用される。

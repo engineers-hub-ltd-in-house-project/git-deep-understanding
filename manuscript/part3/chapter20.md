@@ -1,142 +1,144 @@
-# 第20章: マージの実践演習
+# 第 20 章: 実践演習（第 3 部）
 
-この章は、第3部「マージとコンフリクト」で学んだ知識を総動員して、より実践的なシナリオに挑戦する総合演習です。2人の開発者（あなたと、もう一人の架空の同僚）が、簡単な会社のウェブサイトを開発するという設定で進めます。
+第 3 部では、分岐した歴史を合流させる `git merge` の世界を探検しました。Fast-forward マージのシンプルさから、Three-way マージの賢い仕組み、そして避けられないコンフリクトの原理と解決方法まで、チーム開発における必須スキルを学びました。
 
-この演習を通じて、以下の3つのマージシナリオをすべて体験します。
--   **Three-way マージ**: 平和的に、しかし歴史が分岐した場合の統合。
--   **コンフリクトの解決**: 同じ箇所を編集してしまった場合の対処。
--   **Fast-forward マージ**: クリーンで一直線な歴史の統合。
+この章では、第 3 部で得た知識を総動員し、架空のチーム開発シナリオを通して、様々なマージの状況を実践的に体験します。
 
 ---
-## 20.1 演習の準備: Three-wayマージのシナリオ
+## 20.1 シナリオ: 会社のウェブサイト共同開発
 
-まず、演習用のリポジトリを準備します。
+あなたは企業のウェブサイトを開発するチームの一員です。`main` ブランチが本番のウェブサイトの内容を管理しており、各開発者は担当のページをフィーチャーブランチで開発し、`main` にマージしていくというルールです。
 
+**演習の登場人物**:
+- **あなた**: 「会社概要 (about.html)」ページの作成を担当。
+- **同僚**: あなたと並行して「製品情報 (products.html)」ページの作成を担当。（同僚の作業は、私たちが `main` ブランチで直接コミットすることでシミュレートします。）
+
+### プロジェクトのセットアップ
 ```bash
-mkdir company-website && cd company-website
+# 演習用ディレクトリを作成して移動
+mkdir website-project && cd website-project
 git init
 
-# あなたの作業として、会社の基本情報を含む index.html を作成
-echo "<h1>我が社</h1>" > index.html
-echo "<p>最高の製品を作ります。</p>" >> index.html
+# サイトのホームページを作成
+echo "<h1>Welcome to Our Company</h1>" > index.html
 git add .
-git commit -m "docs: 会社の基本情報を作成"
+git commit -m "Initial commit: Add homepage"
 ```
-
-次に、同僚が「連絡先」を追加する作業を始めるとします。そのために、同僚用のブランチを作成します。
-```bash
-git switch -c feature/contact
-echo "<h2>連絡先</h2>" >> index.html
-echo "<p>Email: contact@example.com</p>" >> index.html
-git add .
-git commit -m "feat: 連絡先情報を追加"
-```
-
-その間に、あなたは`master`ブランチで「会社概要」のセクションを追加する作業を行いました。
-```bash
-git switch master
-echo "<h2>会社概要</h2>" >> index.html
-echo "<p>設立: 2025年</p>" >> index.html
-git add .
-git commit -m "feat: 会社概要を追加"
-```
-
-これで、共通の祖先から`master`と`feature/contact`がそれぞれ異なるコミットを持ち、歴史が分岐しました。Three-wayマージの準備が整いました。
-
-```mermaid
-graph TD
-    C1("基本情報") --> C2("会社概要(master)")
-    C1 --> C3("連絡先(feature)")
-```
-`master`ブランチで、同僚の作業を取り込みましょう。
-```bash
-git merge feature/contact
-```
-Gitはマージコミットメッセージのエディタを開きます。そのまま保存して閉じれば、Three-wayマージが完了します。`index.html`には「会社概要」と「連絡先」の両方が追加されているはずです。
+これが、あなたと同僚が開発を始める前の、共通の出発点です。
 
 ---
-## 20.2 コンフリクトの発生と解決
+## 20.2 あなたの作業: Fast-forward マージを体験
 
-次に、あなたも同僚も、同じ箇所を編集してしまったシナリオを体験します。
-
-同僚は、連絡先のメールアドレスが間違っていたことに気づき、`feature/contact`ブランチで修正しました。
+まず、あなたは自分の担当である「会社概要」ページを作成します。
 ```bash
-git switch feature/contact
-# sedコマンドでメールアドレスを置換します
-sed -i 's/contact@example.com/support@example.com/g' index.html
+# aboutページ用のブランチを作成
+git switch -c feature/about-page
+
+# ページを作成してコミット
+echo "<h1>About Us</h1>" > about.html
 git add .
-git commit -m "fix: メールアドレスを修正"
+git commit -m "feat: Create about page"
 ```
-
-しかし、あなたも`master`ブランチで、同じメールアドレスを別のものに「修正」してしまいました。
+作業が完了したので、`main` ブランチにマージします。この時点では、まだ同僚は作業を終えていない（`main` が更新されていない）ので、Fast-forward マージになるはずです。
 ```bash
-git switch master
-sed -i 's/contact@example.com/info@example.com/g' index.html
+git switch main
+git merge feature/about-page
+```
+出力に "Fast-forward" と表示され、歴史が一直線に進んだことを確認しましょう。`git log --oneline --graph` でも分岐がないことがわかります。
+
+---
+## 20.3 同僚の作業とあなたの次の作業: Three-way マージを体験
+
+あなたが `about.html` をマージした後、同僚が `products.html` の作業を完了し、`main` にマージしました。（この作業をシミュレートします）
+```bash
+# 同僚の作業をシミュレート
+echo "<h1>Our Products</h1>" > products.html
 git add .
-git commit -m "fix: メールアドレスを更新"
+git commit -m "feat: Create products page"
 ```
-これでコンフリクトが発生する準備が整いました。`master`ブランチで、再度同僚のブランチをマージしてみましょう。
-```bash
-git merge feature/contact
-```
-案の定、コンフリクトが発生します。
-```
-Auto-merging index.html
-CONFLICT (content): Merge conflict in index.html
-Automatic merge failed; fix conflicts and then commit the result.
-```
-今回は、同僚の修正が正しい（`support@example.com`）ということにします。
-コンフリクトマーカーを削除し、`index.html`の該当箇所を以下のように修正してください。
+`main` ブランチが、あなたが `feature/about-page` を分岐させた時点から一つ進みました。
 
+さて、あなたは次に `about.html` に「沿革」セクションを追加する作業を始めます。
+```bash
+# 新しい作業のためにブランチを作成
+git switch -c feature/add-history
+
+# 沿革セクションを追加
+echo "<h2>Our History</h2>" >> about.html
+git add .
+git commit -m "feat: Add history section to about page"
+```
+作業が完了したので、`main` にマージしようとします。しかし、今回は `main` の歴史が分岐後（同僚の作業によって）に進んでいるため、Three-way マージが発生します。
+```bash
+git switch main
+git merge feature/add-history
+```
+エディタが立ち上がり、マージコミットのメッセージを求められるはずです。そのまま保存してマージを完了させましょう。`git log --oneline --graph` で、歴史が分岐し、マージコミットによって合流したことを確認してください。
+
+---
+## 20.4 共同作業の宿命: コンフリクトの解決
+
+最後に、あなたと同僚が**同じファイル**を同時に編集してしまったケースを体験します。
+
+`main` ブランチの `index.html` の見出しを、同僚がより具体的に変更しました。
+```bash
+# 同僚の作業をシミュレート
+sed -i 's/Our Company/Our Awesome Company/' index.html
+git add .
+git commit -m "docs: Update main heading"
+```
+時を同じくして、あなたも `index.html` の見出しを、マーケティング部の依頼で別の文言に変更する作業をブランチで行っていました。
+```bash
+# あなたの作業ブランチを作成
+git switch -c feature/update-heading
+
+# 見出しを変更
+sed -i 's/Our Company/The Best Company Inc./' index.html
+git add .
+git commit -m "feat: Update heading based on marketing feedback"
+```
+これでコンフリクトの準備が整いました。`main` にあなたの変更をマージしようとすると、必ずコンフリクトが発生します。
+```bash
+git switch main
+git merge feature/update-heading
+```
+案の定、コンフリクトが発生しました。
+`index.html` を開くと、コンフリクトマーカーが表示されています。
 ```html
-<!-- ...その他のHTML... -->
-<h2>連絡先</h2>
-<p>Email: support@example.com</p>
-<!-- ...その他のHTML... -->
+<<<<<<< HEAD
+<h1>Welcome to Our Awesome Company</h1>
+=======
+<h1>Welcome to The Best Company Inc.</h1>
+>>>>>>> feature/update-heading
 ```
-ファイルを修正したら、第18章で学んだ手順に従って解決します。
+チームで話し合った結果、「The Best Company Inc.」を採用し、さらに感嘆符を追加することになりました。ファイルを以下のように編集します。
+```html
+<h1>Welcome to The Best Company Inc.!</h1>
+```
+ファイルを修正したら、コンフリクト解決の 3 ステップを思い出してください。
 ```bash
+# ステップ2: git add で解決を通知
 git add index.html
+
+# ステップ3: git commit でマージを完了
 git commit
 ```
-エディタが開いたら、デフォルトのメッセージのまま保存してマージを完了します。
+コミットメッセージを編集・保存して、マージを完了します。
 
 ---
-## 20.3 Fast-forwardマージのシナリオ
+**第 3 部のまとめ**
 
-最後に、最もシンプルなFast-forwardマージを体験します。
-同僚が、`feature/contact`ブランチに電話番号を追加しました。その間、`master`ブランチには何の変更もありませんでした。
-```bash
-git switch feature/contact
-echo "<p>Tel: 03-1234-5678</p>" >> index.html
-git add .
-git commit -m "feat: 電話番号を追加"
-```
-この状態では、`master`の歴史は`feature/contact`の歴史に完全に含まれています。
-```mermaid
-graph TD
-    C1 --> C2 --> C3("master") --> C4("feature/contact")
-```
-`master`ブランチに戻り、マージを実行しましょう。
-```bash
-git switch master
-git merge feature/contact
-```
-出力に "Fast-forward" と表示され、マージコミットが作られることなく、`master`ブランチのポインタが`feature/contact`の先端まで移動したことがわかります。
+この演習を通して、私たちはチーム開発で日常的に発生する 3 つのマージパターンを体験しました。
+- 自分の作業中にベースとなるブランチが進んでいない場合の **Fast-forward マージ**。
+- 他のメンバーと並行して開発を進めた結果としての **Three-way マージ**。
+- 同じ箇所を編集してしまった場合の**コンフリクトとその解決**。
 
----
-**まとめ**
+これらの操作が、`.git` 内部のコミットオブジェクトや `parent` ポインタ、参照、インデックスにどのような影響を与えているのかを意識できましたか？ この内部構造の理解こそが、複雑な状況でも冷静に Git を操作するための鍵となります。
 
-お疲れ様でした！この実践演習を通して、あなたはチーム開発で発生しうる主要なマージシナリオをすべて一人で乗り越えました。
-
--   **Three-wayマージ**で、平和的な機能統合を経験し、
--   **コンフリクト**を意図的に発生させ、冷静に解決し、
--   **Fast-forwardマージ**で、クリーンな歴史の統合も行いました。
-
-これで、第3部の内容は完全にあなたのものになりました。コンフリクトはもはや恐怖の対象ではなく、冷静に対処できる技術的な課題の一つに過ぎません。
+第 4 部では、歴史をより美しく、分かりやすく書き換えるための強力なツール、`git rebase` の世界に足を踏み入れます。
 
 最後に演習用ディレクトリを削除しておきましょう。
 ```bash
 cd ..
-rm -rf company-website
+rm -rf website-project
 ```

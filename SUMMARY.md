@@ -48,10 +48,10 @@
 - [第30章: PR でのコンフリクト解決](./manuscript/part5/chapter30.md)
 - [第31章: チーム開発の実践](./manuscript/part5/chapter31.md)
 
-# 第6部: トラブルシューティングと高度なトピック
+# 第6部: Git の便利な道具箱
 
-- [第32章: よくあるエラーと解決法](./manuscript/part6/chapter32.md)
-- [第33章: コミットの修正・取り消し](./manuscript/part6/chapter33.md)
-- [第34章: ファイルの履歴を辿る](./manuscript/part6/chapter34.md)
-- [第35章: サブモジュールとサブツリー](./manuscript/part6/chapter35.md)
-- [第36章: Git の高度な機能](./manuscript/part6/chapter36.md)
+- [第32章: よくある Git のエラーと解決策](./manuscript/part6/chapter32.md)
+- [第33章: `git reset` の 3 つのモードを理解する](./manuscript/part6/chapter33.md)
+- [第34章: `git revert` で安全に歴史を打ち消す](./manuscript/part6/chapter34.md)
+- [第35章: ファイルの履歴を調査する (`log`, `blame`, `checkout`)](./manuscript/part6/chapter35.md)
+- [第36章: Git Hooks で品質を自動化する](./manuscript/part6/chapter36.md)

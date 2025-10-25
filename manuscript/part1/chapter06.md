@@ -1,10 +1,10 @@
-# 第6章: 参照（refs）とブランチ
+# 第 6 章: 参照（refs）とブランチ
 
-これまでの章で、Gitの歴史が`commit`オブジェクトの連鎖によって形成されていることを学びました。しかし、最新のコミットを指し示すために、`a1b2c3d...`のような40桁のハッシュ値を毎回覚えておくのは現実的ではありません。
+これまでの章で、Git の歴史が `commit` オブジェクトの連鎖によって形成されていることを学びました。しかし、最新のコミットを指し示すために、`a1b2c3d...` のような 40 桁のハッシュ値を毎回覚えておくのは現実的ではありません。
 
 そこで登場するのが**参照（reference、略して ref）**です。参照とは、特定のコミットハッシュ値に付けられた、人間が読みやすい「名前」や「ラベル」のことです。その最も代表的な例が、私たちが日常的に使っている「ブランチ」です。
 
-この章では、ブランチの正体が、実は`.git`ディレクトリ内のごく単純なテキストファイルであることを解き明かします。
+この章では、ブランチの正体が、実は `.git` ディレクトリ内のごく単純なテキストファイルであることを解き明かします。
 
 ---
 
@@ -27,29 +27,29 @@ git commit -m "Initial commit"
 
 この時点で、`git log --oneline` を実行すると、最初のコミットのハッシュ値が表示されます（例: `c1a2b3d`）。
 
-さて、この `master`（または `main`）ブランチの実体はどこにあるのでしょうか。`.git/refs/heads` ディレクトリの中を覗いてみましょう。
+さて、この `main` ブランチの実体はどこにあるのでしょうか。`.git/refs/heads` ディレクトリの中を覗いてみましょう。
 
 ```bash
 ls .git/refs/heads
 ```
 出力結果：
 ```
-master
+main
 ```
 
-`master` という名前のファイルがありますね。この中身を見てみましょう。
+`main` という名前のファイルがありますね。この中身を見てみましょう。
 
 ```bash
-cat .git/refs/heads/master
+cat .git/refs/heads/main
 ```
 出力結果（例）：
 ```
 c1a2b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
 ```
 
-中には、最初のコミットの完全なSHA-1ハッシュ値が一行だけ書かれています。
+中には、最初のコミットの完全な SHA-1 ハッシュ値が一行だけ書かれています。
 
-**これがブランチの正体です。** Gitのブランチとは、単に**特定のコミットのハッシュ値を記録した、`refs/heads/`ディレクトリにあるテキストファイル**に過ぎません。
+**これがブランチの正体です。** Git のブランチとは、単に**特定のコミットのハッシュ値を記録した、`refs/heads/` ディレクトリにあるテキストファイル**に過ぎません。
 
 新しいコミットを作成すると何が起こるでしょうか？
 
@@ -59,10 +59,10 @@ git add file.txt
 git commit -m "Second commit"
 ```
 
-新しいコミット（例: `d2b3c4d`）が作成されました。もう一度 `master` ファイルの中身を確認します。
+新しいコミット（例: `d2b3c4d`）が作成されました。もう一度 `main` ファイルの中身を確認します。
 
 ```bash
-cat .git/refs/heads/master
+cat .git/refs/heads/main
 ```
 出力結果（例）：
 ```
@@ -82,16 +82,16 @@ cat .git/HEAD
 ```
 出力結果：
 ```
-ref: refs/heads/master
+ref: refs/heads/main
 ```
 
-`HEAD` ファイルは、**「現在あなたは `refs/heads/master` というブランチにいますよ」**という情報を持っています。`HEAD` は特定のコミットを直接指すのではなく、通常は**ブランチ（参照ファイル）を指し示しています**。これを**シンボリック参照**と呼びます。
+`HEAD` ファイルは、**「現在あなたは `refs/heads/main` というブランチにいますよ」**という情報を持っています。`HEAD` は特定のコミットを直接指すのではなく、通常は**ブランチ（参照ファイル）を指し示しています**。これを**シンボリック参照**と呼びます。
 
 この関係を図にすると、以下のようになります。
 
 ```mermaid
 graph TD
-    HEAD -- "ref: refs/heads/master" --> B(refs/heads/master);
+    HEAD -- "ref: refs/heads/main" --> B(refs/heads/main);
     B -- "d2b3c4d..." --> C2("commit d2b3c4d<br/>Second commit");
     C2 -- "parent" --> C1("commit c1a2b3d<br/>Initial commit");
 ```
@@ -104,13 +104,13 @@ graph TD
 ```bash
 git branch feature
 ```
-このコマンドは、`.git/refs/heads/` に `feature` という新しいファイルを作成するだけです。中身は、現在のブランチ (`master`) が指しているコミットのハッシュ値と同じです。
+このコマンドは、`.git/refs/heads/` に `feature` という新しいファイルを作成するだけです。中身は、現在のブランチ (`main`) が指しているコミットのハッシュ値と同じです。
 
 ```bash
 # 新しいファイルが作成されたか確認
 ls .git/refs/heads
 
-# 中身が master と同じか確認
+# 中身が main と同じか確認
 cat .git/refs/heads/feature
 ```
 
@@ -128,21 +128,21 @@ cat .git/HEAD
 ref: refs/heads/feature
 ```
 
-`HEAD` が `feature` ブランチを指すようになりました。この状態で新しいコミットを作成すると、`feature` ファイルだけが更新され、`master` ファイルは元のままになります。これが、ブランチが分岐していく仕組みです。
+`HEAD` が `feature` ブランチを指すようになりました。この状態で新しいコミットを作成すると、`feature` ファイルだけが更新され、`main` ファイルは元のままになります。これが、ブランチが分岐していく仕組みです。
 
 ```bash
 echo "version 3" > file.txt
 git add file.txt
 git commit -m "Third commit on feature"
 ```
-- `cat .git/refs/heads/feature` -> 3番目のコミットのハッシュ値に更新
-- `cat .git/refs/heads/master` -> 2番目のコミットのハッシュ値のまま
+- `cat .git/refs/heads/feature` -> 3 番目のコミットのハッシュ値に更新
+- `cat .git/refs/heads/main` -> 2 番目のコミットのハッシュ値のまま
 
 ```mermaid
 graph TD
     subgraph Git Directory
         HEAD -- "ref: refs/heads/feature" --> FeatureRef("refs/heads/feature")
-        MasterRef("refs/heads/master")
+        MainRef("refs/heads/main")
     end
 
     subgraph Commits
@@ -152,21 +152,21 @@ graph TD
     end
 
     FeatureRef -- "e3c4d5e..." --> C3
-    MasterRef -- "d2b3c4d..." --> C2
+    MainRef -- "d2b3c4d..." --> C2
     C3 -- parent --> C2
     C2 -- parent --> C1
 ```
-Gitのブランチ作成や切り替えが非常に高速なのは、このように単に40バイト程度のテキストファイルを操作しているだけだからです。
+Git のブランチ作成や切り替えが非常に高速なのは、このように単に 40 バイト程度のテキストファイルを操作しているだけだからです。
 
 ---
 ## 6.3 配管コマンドで参照を操る
 
--   **`git update-ref`**: 参照を直接作成・更新するコマンドです。第5章で「おまじない」として使いましたが、これは `refs/heads/master` ファイルに指定したコミットハッシュを書き込む操作だったのです。
--   **`git rev-parse`**: 参照名（`master`, `HEAD` など）から、それが最終的に指し示しているコミットのハッシュ値を取得します。
+-   **`git update-ref`**: 参照を直接作成・更新するコマンドです。第 5 章で「おまじない」として使いましたが、これは `refs/heads/main` ファイルに指定したコミットハッシュを書き込む操作だったのです。
+-   **`git rev-parse`**: 参照名（`main`, `HEAD` など）から、それが最終的に指し示しているコミットのハッシュ値を取得します。
 
 ```bash
-# masterブランチが指すコミットハッシュを取得
-git rev-parse master
+# mainブランチが指すコミットハッシュを取得
+git rev-parse main
 
 # HEADが指すコミットハッシュを取得
 git rev-parse HEAD
@@ -182,9 +182,9 @@ git rev-parse HEAD
 -   **HEAD** は、`.git/HEAD` ファイルに記録された、現在作業中のブランチを示すポインタである。
 -   ブランチの作成や切り替えが高速なのは、これらの小さなファイルを操作しているだけだから。
 
-これで、Gitのオブジェクト (`blob`, `tree`, `commit`) と、それらを指し示す参照 (`refs`, `HEAD`) という、Gitの内部構造を支える両輪を理解しました。
+これで、Git のオブジェクト (`blob`, `tree`, `commit`) と、それらを指し示す参照 (`refs`, `HEAD`) という、Git の内部構造を支える両輪を理解しました。
 
-しかし、まだ一つ謎が残っています。`git add` したファイルは、コミットされるまでどこにいるのでしょうか？ 次章では、コミットの準備段階である「ステージングエリア」とその実体「インデックス」について学び、第1部を完成させます。
+しかし、まだ一つ謎が残っています。`git add` したファイルは、コミットされるまでどこにいるのでしょうか？ 次章では、コミットの準備段階である「ステージングエリア」とその実体「インデックス」について学び、第 1 部を完成させます。
 
 最後に、実験用ディレクトリを削除しておきましょう。
 ```bash

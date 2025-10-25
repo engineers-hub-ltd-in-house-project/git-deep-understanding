@@ -1,135 +1,113 @@
-# 第3部: マージとコンフリクト
+# 第 3 部: ブランチの合流とコンフリクト解決
 
 ---
 
-# 第15章: Fast-forward マージ
+# 第 15 章: Fast-forward マージ
 
-ブランチを使って、本流の歴史に影響を与えることなく、安全に新機能の開発やバグ修正を行うことができるようになりました。しかし、分岐した歴史は、いつか本流に統合してこそ意味を持ちます。そのための最も基本的な操作が `git merge` です。
+第 2 部では、ブランチを作成して歴史を分岐させる方法を学びました。しかし、分岐した歴史はいつか一つにまとめる必要があります。この「歴史の合流」を行うのが `git merge` コマンドです。
 
-`git merge` にはいくつかの種類がありますが、この章では最もシンプルで、Gitが「ただ歴史を進めるだけ」で統合できる**Fast-forward（早送り）マージ**について学びます。
-
-Fast-forwardマージが起こる条件はただ一つです。
-
-**統合先のブランチ（例: `master`）の歴史が、統合したいブランチ（例: `feature`）の歴史に完全に含まれており、`master` 分岐後に `master` 自身には新しいコミットが生まれていないこと。**
-
-この条件が満たされるとき、Gitはわざわざ新しい「マージコミット」を作る必要はありません。ただ単に`master`ブランチのポインタを`feature`ブランチの先端まで早送りするだけです。
+`git merge` にはいくつかの戦略がありますが、最もシンプルで基本的なのが **Fast-forward (早送り) マージ** です。
 
 ---
-## 15.1 Fast-forwardマージの実演
+## 15.1 Fast-forward が可能な条件
 
-言葉で聞くより、実際に目で見るのが一番です。Fast-forwardマージが起こる典型的なシナリオを体験しましょう。
+Fast-forward マージが発生するには、非常にシンプルな条件が一つだけあります。
+
+**条件**: 合流される側のブランチ（例: `main`）の歴史が、合流する側のブランチ（例: `feature`）の歴史に**完全に含まれている**こと。
+
+言い換えると、`main` ブランチの先端コミットが、`feature` ブランチの歴史の途中のコミットと同一である場合です。このとき、`main` ブランチでは `feature` ブランチが分岐してから新しいコミットが一切行われていません。
+
+```mermaid
+graph TD
+    subgraph "Before Merge (Fast-forward possible)"
+        A --> B --> C
+        Main("main") --> B
+        Feature("feature") --> C
+        HEAD("HEAD -> main") -.-> Main
+    end
+```
+
+この図では、`main` はコミット B を指しており、`feature` はコミット C を指しています。コミット C の親は B であり、`main` の歴史は `feature` の歴史に完全に含まれています。この状態が Fast-forward マージの条件を満たしています。
+
+---
+## 15.2 Fast-forward マージの内部動作
+
+では、実際に Fast-forward マージを実行し、`.git` の内部で何が起こるのかを見てみましょう。
 
 ```bash
 # 実験用ディレクトリを作成して移動
-mkdir git-merge-practice && cd git-merge-practice
+mkdir ff-merge-practice && cd ff-merge-practice
 git init
 
-# masterブランチで最初のコミット
+# ベースとなるコミットを作成
 echo "v1" > file.txt && git add . && git commit -m "v1"
 
-# featureブランチを作成して、そちらに切り替え
+# featureブランチを作成して、そこで作業を進める
 git switch -c feature
+echo "v2" > file.txt && git add . && git commit -m "v2"
+echo "v3" > file.txt && git add . && git commit -m "v3"
 ```
-この時点での歴史は以下のようになっています。`master`も`feature`も同じコミットを指しています。
-```mermaid
-graph TD
-    subgraph Commits
-        C1("Commit v1")
-    end
-    subgraph Refs
-        HEAD -- "ref: .../feature" --> Feature("refs/heads/feature")
-        Master("refs/heads/master")
-    end
-    Feature --> C1
-    Master --> C1
-```
+この時点で、`main` は v1 コミットを、`feature` は v3 コミットを指しています。これは Fast-forward 可能な状態です。
 
-次に、`feature`ブランチだけで作業を進めます。
+マージを実行するために、まず合流の受け手となる `main` ブランチに移動します。
 ```bash
-echo "v2" >> file.txt && git add . && git commit -m "v2 on feature"
-echo "v3" >> file.txt && git add . && git commit -m "v3 on feature"
-```
-`feature`ブランチが2つ先に進みました。`master`ブランチは`v1`に取り残されたままです。
-
-```mermaid
-graph TD
-    subgraph Commits
-        C1("v1") --> C2("v2") --> C3("v3")
-    end
-    subgraph Refs
-        HEAD -- "ref: .../feature" --> Feature("refs/heads/feature")
-        Master("refs/heads/master")
-    end
-    Feature --> C3
-    Master --> C1
+git switch main
 ```
 
-さて、`feature`ブランチでの開発が終わったので、この成果を`master`ブランチに取り込みます。まずは`master`ブランチに戻ります。
-```bash
-git switch master
-```
-
-そして、`git merge`コマンドを実行します。
+そして、`git merge` コマンドで `feature` ブランチを取り込みます。
 ```bash
 git merge feature
 ```
-出力結果:
+
+出力結果に注目してください。
 ```
-Updating <hash1>..<hash3>
+Updating <v1のハッシュ>..<v3のハッシュ>
 Fast-forward
- file.txt | 2 ++
- 1 file changed, 2 insertions(+)
+ file.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 ```
-出力に "Fast-forward" と明記されていることに注目してください。
+「Fast-forward」という文字が表示され、マージが成功したことが分かります。
 
-`git log --oneline --graph --all` で歴史を確認してみましょう。
-```
-* <hash3> (HEAD -> master, feature) v3 on feature
-* <hash2> v2 on feature
-* <hash1> v1
-```
-分岐していたはずの歴史が、一直線に繋がりました。
+このとき、Git が内部で行ったことは驚くほどシンプルです。
 
----
-## 15.2 Fast-forwardマージの内部動作
+**`main` ブランチのポインタ（`.git/refs/heads/main` ファイルの中身）を、`feature` ブランチが指しているコミットのハッシュ値に書き換える。**
 
-`git merge feature` を実行したとき、`.git` の中で何が起こったのでしょうか？
-答えは驚くほどシンプルです。
-
-**`.git/refs/heads/master` ファイルの中身を、`.git/refs/heads/feature` ファイルの中身で上書きした。**
-
-これだけです。
-Gitはマージを実行する際、まず`master`が指すコミット(`v1`)が、`feature`が指すコミット(`v3`)の直接の祖先であるかを確認します。この関係が成り立つため、「わざわざ新しいマージコミットを作るまでもない。ただ`master`のポインタを`v3`に進めればよい」と判断します。これがFast-forwardマージです。
+たったこれだけです。新しいコミットは一切作成されません。ただブランチのポインタを「早送り」するだけなので、非常に高速に処理が終わります。
 
 ```mermaid
 graph TD
-    subgraph "After Merge"
-        C1("v1") --> C2("v2") --> C3("v3")
+    subgraph "After Merge (Fast-forward)"
+        A --> B --> C
+        Main("main") --> C
+        Feature("feature") --> C
+        HEAD("HEAD -> main") -.-> Main
     end
-    subgraph Refs
-        HEAD -- "ref: .../master" --> Master("refs/heads/master")
-        Feature("refs/heads/feature")
-    end
-    Master --> C3
-    Feature --> C3
 ```
+マージ後、`main` と `feature` は全く同じコミットを指すことになります。`git log --oneline --graph` を見ても、歴史は分岐することなく、一直線のままです。
 
-新しいコミットは一切作られず、ただブランチという名のポインタが移動するだけなので、非常にクリーンで分かりやすい歴史が保たれます。個人のローカルリポジトリでトピックブランチを最新の`main`に追従させる際など、頻繁に発生するマージの形です。
+---
+## 15.3 Fast-forward の利点と欠点
+
+**利点**:
+- **クリーンな歴史**: マージコミットが作られないため、プロジェクトの歴史が一直線に保たれ、非常に見通しが良くなります。
+- **高速**: 新しいオブジェクトを作成せず、ポインタを動かすだけなので処理が高速です。
+
+**欠点**:
+- **情報の損失**: 「どこで `feature` ブランチが `main` に合流したのか」という情報が歴史から失われます。全てのコミットが `main` 上で直接行われたかのように見えてしまいます。
+
+この情報の損失を避けたい場合、`--no-ff` (No Fast-forward) オプションを使うことで、Fast-forward が可能な状況でも意図的にマージコミットを作成することができます。これについては次の章で詳しく学びます。
 
 ---
 **まとめ**
 
-この章では、最も基本的なマージの形態であるFast-forwardマージについて学びました。
+- Fast-forward マージは、合流先のブランチの歴史が分岐していない場合にのみ発生する。
+- 内部的には、新しいコミットは作成されず、単にブランチのポインタが移動するだけである。
+- 歴史が一直線でクリーンに保たれる利点がある一方、どこでブランチが合流したかの情報が失われるという欠点もある。
 
--   Fast-forwardマージは、統合先ブランチが分岐後に変更されていない場合にのみ発生する。
--   新しいマージコミットは作成されず、単にブランチのポインタ（参照）が移動するだけである。
--   内部的には、`.git/refs/heads/` 内の参照ファイルの中身が更新されるだけの、非常に軽量な操作である。
--   結果として、歴史は分岐のない一直線の状態が保たれる。
+次の章では、歴史が分岐している場合に発生する、より一般的なマージ方法である「Three-way マージ」について探求します。
 
-では、`master`ブランチも分岐後に変更が進んでいた場合はどうなるのでしょうか？ その時こそ、Gitの真価が発揮される「Three-wayマージ」の出番です。次章で詳しく見ていきましょう。
-
-最後に演習用ディレクトリを削除しておきましょう。
+最後に実験用ディレクトリを削除しておきましょう。
 ```bash
 cd ..
-rm -rf git-merge-practice
+rm -rf ff-merge-practice
 ```

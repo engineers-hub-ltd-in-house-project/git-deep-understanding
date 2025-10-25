@@ -1,145 +1,118 @@
-# 第16章: Three-way マージ
+# 第 16 章: Three-way マージ
 
-Fast-forwardマージは、歴史が一直線に進んでいるという特殊な状況でしか発生しません。チーム開発の現場では、あなたが`feature`ブランチで作業している間に、他の誰かが変更を`master`ブランチにマージし、`master`の歴史が進んでいることがほとんどです。
+Fast-forward マージはシンプルですが、実際のチーム開発では、自分が `feature` ブランチで作業している間に、他の誰かが `main` ブランチを更新している、という状況が頻繁に発生します。
 
-このように、統合元と統合先のブランチが分岐した後に、両方の歴史が進んでいる場合、Gitは自動的に**Three-wayマージ（3者間マージ）** を行います。これは、新しい**マージコミット**を作成することで、2つの異なる歴史を1つに統合する、より一般的で強力なマージ方法です。
+このように、**合流先のブランチ (`main`) と合流元のブランチ (`feature`) の歴史が分岐してしまった**場合、Git はもはやポインタを早送りするだけでは歴史を統合できません。ここで登場するのが、Git のマージ戦略の主力である **Three-way (3 者間) マージ** です。
 
 ---
-## 16.1 Three-wayマージの発生シナリオ
+## 16.1 Three-way マージの発生条件
 
-まず、Three-wayマージが発生する典型的な状況を再現してみましょう。
+Three-way マージが発生する条件は、Fast-forward の逆です。
+
+**条件**: 合流する `main` ブランチと `feature` ブランチが、**共通の祖先（マージベース）**からそれぞれ異なるコミットを進めていること。
+
+```mermaid
+graph TD
+    subgraph "Before Merge (Three-way merge needed)"
+        A --> B --> D("D (main)")
+        A --> C("C (feature)")
+        Main("main") --> D
+        Feature("feature") --> C
+    end
+```
+この図では、コミット A が `main` と `feature` の共通祖先（マージベース）です。その後、`main` はコミット D に、`feature` はコミット C に進んでおり、歴史が分岐しています。この状態をマージしようとすると、Three-way マージが実行されます。
+
+---
+## 16.2 Three-way マージの内部動作
+
+Three-way マージは、その名の通り 3 つのコミットを比較して動作します。
+
+1.  **マージベース (Merge Base)**: 2 つのブランチが分岐した共通の祖先コミット。上の図の A。
+2.  **ターゲットブランチの HEAD**: マージされる側のブランチの先端コミット。上の図の D (`main`)。
+3.  **マージングブランチの HEAD**: マージする側のブランチの先端コミット。上の図の C (`feature`)。
+
+Git はこれら 3 つのスナップショットを元に、以下のロジックで新しいスナップショットを自動生成します。
+
+-   **マージベースから片方のブランチだけが変更した箇所**: その変更をそのまま採用する。
+-   **マージベースから両方のブランチが変更したが、内容が同じ箇所**: その変更をそのまま採用する。
+-   **マージベースから両方のブランチが、それぞれ異なる変更を加えた箇所**: Git は自動で判断できない。これを**コンフリクト (衝突)** と呼び、ユーザーに解決を委ねる。（コンフリクトについては次章で詳しく学びます。）
+-   **両方とも変更していない箇所**: そのまま維持する。
+
+そして、この新しいスナップショットから `tree` オブジェクトを作成し、**2 つの親を持つ特別なコミット**、すなわち**マージコミット**を新たに作成します。
+
+### Three-way マージの実演
+
+実際に体験してみましょう。
 
 ```bash
 # 実験用ディレクトリを作成して移動
-mkdir git-3way-merge && cd git-3way-merge
+mkdir 3way-merge-practice && cd 3way-merge-practice
 git init
 
-# 共通の祖先となる最初のコミットを作成
-echo "line 1" > file.txt && git add . && git commit -m "v1: base"
-```
-このv1コミットが、これから分岐する2つの歴史の**共通の祖先（merge base）** となります。
+# 共通の祖先となるコミットを作成
+echo "common base" > file.txt && git add . && git commit -m "base"
 
-```mermaid
-graph TD
-    C1("v1: base")
-    Master("refs/heads/master") --> C1
-    HEAD -- "ref: .../master" --> Master
-```
-
-次に、`feature`ブランチを作成し、そこで作業を進めます。
-```bash
+# featureブランチを作成し、そこで変更
 git switch -c feature
-echo "line 2: feature" >> file.txt && git add . && git commit -m "v2: feature"
+echo "feature change" >> file.txt && git add . && git commit -m "feat: change"
+
+# mainブランチに戻り、main側でも別の変更を行う
+git switch main
+echo "main change" >> file.txt && git add . && git commit -m "docs: change"
 ```
 
-ここで、`master`ブランチにも別の変更が加わったと仮定します。一度`master`に戻り、別の作業を行います。
+これで歴史が分岐しました。`git log --oneline --graph --all` で確認できます。
+いよいよマージを実行します。
 ```bash
-git switch master
-echo "line 3: master" >> file.txt && git add . && git commit -m "v3: master"
-```
-これで、`v1`という共通の祖先から、`feature`ブランチと`master`ブランチがそれぞれ異なる歴史を歩むことになりました。
-`git log --oneline --graph --all` で確認すると、歴史が分岐しているのが明確にわかります。
-```
-* <hash3> (HEAD -> master) v3: master
-| * <hash2> (feature) v2: feature
-|/
-* <hash1> v1: base
-```
-図で表すと以下のようになります。
-```mermaid
-graph TD
-    C1("v1: base") --> C2("v2: feature")
-    C1 --> C3("v3: master")
-
-    subgraph Refs
-        Feature("refs/heads/feature") --> C2
-        Master("refs/heads/master") --> C3
-        HEAD -- "ref: .../master" --> Master
-    end
-```
-
----
-## 16.2 マージの実行とマージコミット
-
-いよいよ、この分岐した歴史を統合します。`master`ブランチにいることを確認し、`feature`ブランチをマージします。
-
-```bash
-# masterブランチにいることを確認
-git switch master
-
 git merge feature
 ```
-すると、Gitはマージコミットのメッセージを編集するためのエディタを起動します。デフォルトのメッセージ（`Merge branch 'feature'`）のまま保存して終了しましょう。
+コンフリクトがなければ、エディタが立ち上がり、マージコミットのメッセージを編集する画面になります。（デフォルトメッセージのままでよければ、そのまま保存して閉じてください。）
 
-マージが完了しました。`git log --oneline --graph --all` で歴史をもう一度見てみましょう。
+マージが完了すると、新しいマージコミットが作成されます。`git log --oneline --graph` を見てみましょう。
 ```
-*   <hash4> (HEAD -> master) Merge branch 'feature'
+*   a1b2c3d (HEAD -> main) Merge branch 'feature'
 |\
-| * <hash2> (feature) v2: feature
-* | <hash3> v3: master
+| * e4f5g6h (feature) feat: change
+* | i7j8k9l docs: change
 |/
-*   <hash1> v1: base
+* l0m1n2o base
 ```
-`v2`と`v3`の歴史が、新しく作られたコミット`Merge branch 'feature'`（hash4）に統合されました。このコミットが**マージコミット**です。
+`a1b2c3d` がマージコミットです。グラフが 2 つのブランチが 1 つに合流したことを示しています。
+このマージコミットの中身を `git cat-file -p HEAD` で見てみると、`parent` が 2 つあることが分かります。
 
-マージコミットの大きな特徴は、**親が2つある**ことです。`git cat-file -p HEAD` でマージコミットの内部を見てみましょう。
 ```
 tree <tree_hash>
-parent <hash3> # 1番目の親: masterの先端
-parent <hash2> # 2番目の親: featureの先端
+parent <main_commit_hash>
+parent <feature_commit_hash>
 author ...
 committer ...
 
 Merge branch 'feature'
 ```
-`parent`が2つ存在することが、このコミットが2つの歴史を束ねる特別なコミットであることを示しています。
 
-```mermaid
-graph TD
-    C1("v1: base") --> C2("v2: feature")
-    C1 --> C3("v3: master")
-    C2 --> C4("Merge commit")
-    C3 --> C4("Merge commit")
-
-    subgraph Refs
-        Feature("refs/heads/feature") --> C2
-        Master("refs/heads/master") --> C4
-        HEAD -- "ref: .../master" --> Master
-    end
-```
+これが Three-way マージの正体です。分岐した歴史を、その事実を消すことなく（Fast-forward のように）、一つの新しい歴史として統合するための仕組みなのです。
 
 ---
-## 16.3 Three-wayマージの内部動作
+## 16.3 `--no-ff` オプション
 
-なぜ「Three-way（3者間）」なのでしょうか？ それは、Gitがマージを行う際に3つのコミットを比較対象として利用するからです。
+前章で少し触れた `--no-ff` (No Fast-forward) オプションは、Fast-forward が可能な状況でも、**意図的に Three-way マージ（の形）を強制する**ためのものです。
 
-1.  **共通の祖先 (Merge Base)**: `v1`のコミット。
-2.  **統合先のブランチの先端 (HEAD)**: `master`の`v3`のコミット。
-3.  **統合元のブランチの先端**: `feature`の`v2`のコミット。
+なぜこれが必要なのでしょうか？ Fast-forward マージは歴史が一直線になり綺麗ですが、「この一連のコミットは `feature-X` という機能開発のために行われた」という文脈情報が失われてしまいます。
 
-Gitは、この3つのスナップショット（正確にはtreeオブジェクト）を使って、以下のように変更点を判断し、新しいスナップショットを作成します。
-
--   **共通祖先から`master`での変更点**: `v1` -> `v3` の差分 (「line 3: master」の追加)
--   **共通祖先から`feature`での変更点**: `v1` -> `v2` の差分 (「line 2: feature」の追加)
-
-そして、この2つの変更点を**両方とも適用**した新しい状態を作り出します。今回の例では、`file.txt`の末尾に`line 2`と`line 3`が両方追加された状態です。Gitは、この新しい状態から新しい`tree`オブジェクトを作成し、2つの親を持つ新しい`commit`オブジェクト（マージコミット）を作成して、`master`ブランチの参照をそこに進めるのです。
-
-この賢い仕組みのおかげで、並行して進んだ別々の作業を、Gitは自動的に統合することができます。
+`--no-ff` を使ってマージすると、たとえ Fast-forward が可能でも必ずマージコミットが作られます。これにより、ブランチの存在した事実が歴史に残り、後から見返した時に「どこからどこまでが、ある機能開発の単位だったのか」が明確になります。多くのチーム開発の現場で、`main` ブランチへのマージには `--no-ff` が推奨されるのはこのためです。
 
 ---
 **まとめ**
 
-この章では、チーム開発における標準的なマージ方法であるThree-wayマージを学びました。
+- Three-way マージは、分岐した 2 つのブランチを合流させるための標準的な方法である。
+- **マージベース**、**ターゲットブランチ**、**マージングブランチ**の 3 者を比較して、新しいスナップショットを自動生成する。
+- 結果として、**2 つの親を持つマージコミット**が新たに作成され、歴史の合流点が明確に記録される。
+- `--no-ff` オプションを使うことで、Fast-forward 可能な状況でもマージコミットの作成を強制し、開発の文脈を歴史に残すことができる。
 
--   統合元と統合先のブランチが分岐後に、両方とも歴史が進んでいる場合に発生する。
--   **マージコミット**という、2つの親を持つ特別なコミットが新たに作成される。
--   内部的には、「共通の祖先」「統合先の先端」「統合元の先端」という3つのコミットを比較し、両方の変更を適用した新しい状態を作り出している。
--   これにより、分岐した開発の歴史を安全に1つに統合できる。
+しかし、もし 2 つのブランチが同じファイルの同じ行を別々に変更していたら？ 次の章では、Git が自動解決できない状況、すなわち「コンフリクト」の謎に迫ります。
 
-しかし、もし`master`と`feature`で**同じファイルの同じ行**を変更していたらどうなるのでしょうか？ Gitはどちらの変更を採用すべきか自動では判断できません。これこそが、次章で学ぶ「コンフリクト」の正体です。
-
-最後に演習用ディレクトリを削除しておきましょう。
+最後に実験用ディレクトリを削除しておきましょう。
 ```bash
 cd ..
-rm -rf git-3way-merge
+rm -rf 3way-merge-practice
 ```

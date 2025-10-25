@@ -1,145 +1,78 @@
-# 第27章: fetch vs pull
-
-リモートリポジトリの最新の変更をローカルに取り込む際、`git fetch`と`git pull`という2つの主要なコマンドがあります。多くの入門書では`git pull`が紹介されますが、この2つのコマンドの挙動は根本的に異なり、特にチーム開発においては、その違いを理解し使い分けることが非常に重要です。
-
-結論から言うと、`git pull`は**`git fetch`と`git merge`を連続で実行する便利なショートカット**です。便利である一方、意図しないマージやコンフリクトをいきなり引き起こす可能性があるため、何が起こるか予測できないうちは`git fetch`を使う方が安全です。
-
-この章では、シミュレーションを通じて、それぞれのコマンドがローカルリポジトリに何をもたらすのかを正確に見ていきましょう。
+# 第 27 章: Fetch と Pull の違い: 安全な同期方法
 
 ---
-## 27.1 シナリオの準備
 
-まず、あなたと他の開発者が同じリポジトリで作業している状況をシミュレートします。
-```bash
-# リモートリポジトリ（bare）を作成
-git init --bare ../fetch-vs-pull.git
+リモートリポジトリから他のメンバーの変更を自分のローカルリポジトリに取り込むコマンドとして、`git fetch` と `git pull` の 2 つがあります。初心者が混乱しやすいこの 2 つのコマンドは、似ているようでいて、その動作と安全性において**決定的な違い**があります。
 
-# あなたのローカルリポジトリ
-git clone ../fetch-vs-pull.git my-repo && cd my-repo
-echo "Commit 1" > file.txt && git add . && git commit -m "C1"
-git push origin main
-```
-この時点で、リモートとあなたのローカルは`C1`というコミットで完全に同期しています。
-
-次に、他の開発者がリモートリポジトリに変更をプッシュしたと仮定します。これをシミュレートするため、別のディレクトリでリモートをクローンし、コミットを追加してプッシュします。
-```bash
-cd ..
-git clone fetch-vs-pull.git another-repo && cd another-repo
-git config user.name "Other Dev"
-echo "Commit 2" >> file.txt && git add . && git commit -m "C2"
-git push origin main
-cd ../my-repo # あなたのリポジトリに戻る
-```
-これで、リモートリポジトリの`main`ブランチは`C2`に進みましたが、あなたのローカルリポジトリはまだ`C1`のまま、という状況が完成しました。
-
-あなたのリポジトリの現在の状態:
--   `main` (ローカルブランチ): `C1`を指している
--   `origin/main` (リモート追跡ブランチ): `C1`を指している（まだリモートと通信していないため）
+この章では、両者の内部動作を正確に理解し、なぜチーム開発において `fetch` を使ったワークフローが推奨されるのかを学びます。
 
 ---
-## 27.2 `git fetch`の挙動: 安全な同期
+## 27.1 `git fetch` の動作: 安全な情報収集
 
-まず、安全な`git fetch`から試してみましょう。
-```bash
-git fetch origin
-```
-出力結果:
-```
-From ../fetch-vs-pull
-   <hash_c1>..<hash_c2>  main       -> origin/main
-```
-このコマンドが実行したことは、たった2つです。
-1.  リモートリポジトリ(`origin`)から、あなたのローカルにまだ存在しないオブジェクト（`C2`のコミットオブジェクトなど）をすべてダウンロードする。
-2.  あなたのローカルにある**リモート追跡ブランチ (`origin/main`) のポインタを、リモートの最新の状態 (`C2`) まで進める**。
+`git fetch` は、リモートリポジトリから最新の情報を**取得するだけ**の、非常に安全なコマンドです。
 
-重要なのは、`fetch`はあなたの**ローカルブランチ (`main`) には一切触れない**ということです。作業ディレクトリのファイルも変更されません。
+`git fetch origin` を実行すると、Git は以下のことを行います。
+1.  リモートリポジトリ (`origin`) に接続します。
+2.  あなたのローカルリポジトリにまだ存在しない、リモートのコミットオブジェクトやツリーオブジェクトなどをすべてダウンロードしてきます。
+3.  リモートの各ブランチの最新のコミットを指すように、あなたのローカルにある**リモート追跡ブランチ** (`origin/main` など) のポインタを更新します。
 
-`git log --oneline --graph --all`で状態を確認しましょう。
-```
-* <hash_c2> (origin/main) C2
-* <hash_c1> (HEAD -> main) C1
-```
-`origin/main`だけが先に進み、あなたの`main`ブランチは元の場所に取り残されていることが明確にわかります。
+**重要なポイント**:
+`fetch` は、あなたのローカルブランチ (`main` など) には**一切触れません**。作業ディレクトリやステージングエリアのファイルも全く変更しません。
+リモートの状況をローカルに同期するための、純粋な「情報収集」コマンドです。
 
 ```mermaid
 graph TD
-    subgraph "After git fetch"
-        C1("C1") --> C2("C2")
-        subgraph "Local Repo"
-            Main("main") --> C1
-            OriginMain("origin/main") --> C2
-        end
+    subgraph "Local Repo Before fetch"
+        A("main") --> C1
+        B("origin/main") --> C1
+    end
+    subgraph "Remote Repo"
+        D("main") --> C2 --> C1
+    end
+
+    subgraph "Local Repo After fetch"
+        A_after("main") --> C1_after
+        B_after("origin/main") --> C2_after --> C1_after
     end
 ```
-`fetch`は純粋に情報収集だけを行うため、非常に安全な操作です。`fetch`した後で、`git diff main origin/main`や`git log main..origin/main`を実行すれば、リモートでどのような変更があったのかをマージする前に確認できます。
+`fetch` 後、`origin/main` はリモートと同じ `C2` を指すようになりますが、あなたの `main` は `C1` のままです。この時点で、`git log main..origin/main` を実行すれば、リモートでどのような変更があったかを確認できます。
 
 ---
-## 27.3 `git pull`の挙動: fetch + merge
+## 27.2 `git pull` の動作: 取得して、即統合
 
-では、`git pull`はどうでしょうか。一度、`fetch`前の状態に戻って試してみましょう。
-```bash
-# C2コミットを消し、origin/mainもC1に戻すハードリセット
-git reset --hard <hash_c1>
-git update-ref refs/remotes/origin/main <hash_c1>
-```
-これで、再び`main`も`origin/main`も`C1`を指す、リモートと通信する前の状態に戻りました。
+`git pull` は、多くの人が `fetch` の代わりによく使うコマンドですが、その実体は**2 つのコマンドのショートカット (組み合わせ)** です。
 
-ここで`git pull`を実行します。
-```bash
-git pull origin main
-```
-出力結果:
-```
-From ../fetch-vs-pull
-   <hash_c1>..<hash_c2>  main       -> origin/main
-Updating <hash_c1>..<hash_c2>
-Fast-forward
- file.txt | 1 +
- 1 file changed, 1 insertion(+)
-```
-`git fetch`の時と同じ出力に加えて、「Updating... Fast-forward」という見慣れたマージのログが表示されました。
+`git pull origin main` を実行することは、内部的に以下の 2 つのコマンドを連続で実行することとほぼ同義です。
 
-`git log --oneline --graph --all`で状態を確認します。
-```
-* <hash_c2> (HEAD -> main, origin/main) C2
-* <hash_c1> C1
-```
-`pull`を実行した結果、`origin/main`だけでなく、あなたのローカルブランチ`main`も`C2`まで進みました。
-
-```mermaid
-graph TD
-    subgraph "After git pull"
-        C1("C1") --> C2("C2")
-        subgraph "Local Repo"
-            Main("main") --> C2
-            OriginMain("origin/main") --> C2
-        end
-    end
-```
-
-これは、`git pull`が内部で以下の2つのコマンドを連続で実行したからです。
 1.  `git fetch origin`
-2.  `git merge origin/main` (現在のブランチに、対応するリモート追跡ブランチをマージする)
+2.  `git merge origin/main` (現在のブランチに `origin/main` をマージする)
 
-もし、リモートとローカルの両方で歴史が分岐していた場合、`git pull`は自動的にThree-wayマージを行い、あなたのローカルにマージコミットを作成します。事前に変更内容を確認するステップを挟まないため、予期せぬコンフリクトに直面することもあります。
+つまり、`pull` はリモートの情報を取得するだけでなく、**即座にその変更をあなたの現在のローカルブランチに統合 (マージ) しようとします**。
+
+これは便利に見えますが、危険もはらんでいます。
+もしリモートに予期しない変更があった場合、`pull` を実行した瞬間にあなたの作業中のコードとマージされ、コンフリクトが発生したり、意図しない変更が混入したりする可能性があります。「どんな変更があるか」を**確認する前に、統合が始まってしまう**のです。
+
+---
+## 27.3 なぜ `fetch` + `merge` が推奨されるのか
+
+チーム開発におけるベストプラクティスとして、`pull` を無条件に使うのではなく、`fetch` を使った以下の 2 ステップのワークフローが強く推奨されます。
+
+**推奨ワークフロー**:
+1.  **`git fetch origin`**: まずはリモートの変更を取得し、リモート追跡ブランチ (`origin/main`) を更新します。
+2.  **変更の確認と比較**:
+    - `git log origin/main` や `git diff main origin/main` を使って、リモートでどのような変更が行われたのかを確認します。
+    - `git status` を実行すると、「Your branch is behind 'origin/main' by X commits...」といったメッセージで、自分のブランチがどれだけ遅れているかを確認できます。
+3.  **統合**: 変更内容を把握した上で、手動で統合します。
+    - `git merge origin/main` を実行して、リモートの変更をローカルブランチに取り込みます。
+    - あるいは、歴史を一直線に保ちたい場合は `git rebase origin/main` を使うこともできます。
+
+このワークフローの**最大の利点**は、リモートの変更を自分の作業に統合する前に、**「何が変更されたのか」をじっくりと確認し、心の準備をする時間がある**ことです。これにより、予期せぬコンフリクトに慌てることなく、計画的に変更を取り込むことができます。
 
 ---
 **まとめ**
 
-この章では、`git fetch`と`git pull`の決定的な違いを学びました。
-
--   **`git fetch`**: リモートの最新情報を取得し、**リモート追跡ブランチ (`origin/main`) のみ**を更新する。ローカルの作業ブランチには影響を与えない、安全な読み取り専用操作。
--   **`git pull`**: `git fetch`を実行した**直後に**`git merge`を実行する。リモートの変更をローカルの作業ブランチに自動で統合する。
-
-推奨されるワークフローは以下の通りです。
-1.  `git fetch`でまずリモートの変更を確認する。
-2.  `git log main..origin/main`などで差分を確認する。
-3.  `git merge origin/main`や`git rebase origin/main`など、状況に応じて最適な方法で手動で統合する。
-
-この手順を踏むことで、「何がどうなるかわからないまま変更が取り込まれる」という状況を避け、常にリポジトリの状態を完全にコントロール下に置くことができます。
-
-最後に演習用ディレクトリを削除しておきましょう。
-```bash
-cd ..
-rm -rf fetch-vs-pull.git my-repo another-repo
-```
+- `git fetch`: リモートの情報を取得し、**リモート追跡ブランチのみを更新する**。ローカルの作業ブランチには影響を与えない安全なコマンド。
+- `git pull`: `git fetch` と `git merge` を組み合わせたコマンド。リモートの情報を取得し、**即座に現在のロー-カルブランチにマージする**。
+- `pull` は便利だが、リモートの変更内容を確認する前に統合が始まってしまうリスクがある。
+- チーム開発では、**`fetch` してから `merge` (または `rebase`)** するという、意図的な 2 ステップのプロセスを踏むことで、より安全で確実なコードの同期が可能になる。
+- 癖として `git pull` を使うのをやめ、`git fetch` を基本とする習慣を身につけることが、Git のスキルを一段階上げるための重要なステップです。

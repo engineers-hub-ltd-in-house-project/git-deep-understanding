@@ -1,111 +1,106 @@
-# 第35章: サブモジュールとサブツリー
+# 第 35 章: ファイルの履歴を調査する (`log`, `blame`, `checkout`)
 
-プロジェクトが大規模になると、一つのリポジトリが他のリポジトリに依存する、という状況が頻繁に発生します。例えば、複数のプロジェクトで共有されるUIコンポーネントライブラリや、特定の機能を提供するマイクロサービスなどを、メインのリポジトリから利用したい場合です。
+バグの原因調査や仕様変更の経緯を追う際、「このコードはいつ、誰が、なぜ変更したのか？」という情報は極めて重要です。Git はプロジェクト全体の歴史だけでなく、ファイル一つ一つの変遷も詳細に記録しています。
 
-このような「リポジトリ内リポジトリ」の依存関係を管理するために、Gitは主に2つの仕組みを提供しています。「サブモジュール」と「サブツリー」です。これらは似た問題を解決しますが、そのアプローチとトレードオフは大きく異なります。
-
----
-## 35.1 Git Submodule: 参照としての依存関係
-
-サブモジュールは、親リポジトリ内に、**別の独立したGitリポジトリへのリンク（参照）** を埋め込む機能です。親リポジトリは、サブモジュールの中身のファイルを直接管理しません。代わりに、「このパスには、あのリポジトリの、このコミットを配置せよ」という情報だけを記録します。
-
-**サブモジュールの追加**
-
-`my-project`というプロジェクトが、外部の`shared-library`に依存しているとします。
-```bash
-# まずは親プロジェクトと、依存されるライブラリを準備
-git init shared-library && cd shared-library
-echo "Utility function" > lib.js && git add . && git commit -m "Initial library"
-cd ..
-
-git init my-project && cd my-project
-echo "# My Project" > README.md && git add . && git commit -m "Initial project"
-
-# サブモジュールとして shared-library を追加
-git submodule add ../shared-library libs
-```
-このコマンドは、以下のことを行います。
-1.  `libs`ディレクトリに`shared-library`リポジトリをクローンする。
-2.  `.gitmodules`という設定ファイルを作成（または更新）し、サブモジュールの情報を記録する。
-3.  親リポジトリに、`libs`ディレクトリへの参照をステージングする。
-
-`git status`を見ると、`.gitmodules`と`libs`がステージングされていることがわかります。これらをコミットすることで、依存関係が記録されます。
-```bash
-git commit -m "feat: Add shared-library as a submodule"
-```
-
-**サブモジュールを含むリポジトリのクローン**
-
-サブモジュールを含むリポジトリをクローンする場合、通常の方法では親リポジトリしかクローンされず、サブモジュールのディレクトリは空になります。
-```bash
-# 通常のクローンではサブモジュールの中身は空
-git clone ../my-project project-clone-normal
-ls project-clone-normal/libs # -> 空っぽ
-
-# --recurse-submodules を使うと、サブモジュールも自動的に初期化・取得される
-git clone --recurse-submodules ../my-project project-clone-recursive
-ls project-clone-recursive/libs # -> lib.js が存在する
-```
-もし`--recurse-submodules`を忘れた場合は、クローン後に`git submodule update --init`を実行することで手動で取得できます。
-
--   **メリット**:
-    -   親リポジトリと子リポジトリの歴史が完全に分離される。
-    -   親リポジトリは子リポジトリの特定のコミットを指すだけなので、依存バージョンを厳密に管理できる。
--   **デメリット**:
-    -   クローン時や更新時に、サブモジュールを意識した特別なコマンド (`--recurse-submodules`, `submodule update`) が必要。
-    -   ワークフローが複雑になりがちで、初心者が混乱しやすい。
+この章では、特定のファイルの歴史を深く掘り下げるための 3 つのコマンド、`git log`, `git blame`, `git checkout` を学びます。これらはコードの考古学者として、過去の変更の意図を解明するための強力な武器となります。
 
 ---
-## 35.2 Git Subtree: コピーとしての依存関係
+## 35.1 `git log -- <file>`: 特定のファイルの変更履歴を見る
 
-サブツリーは、サブモジュールよりもずっとシンプルなアプローチを取ります。**別のリポジトリのファイルと歴史を、自分のリポジトリのサブディレクトリに完全にコピーしてしまう**のです。一度取り込んでしまえば、それらは親リポジトリ内のごく普通のファイルとディレクトリとして扱われます。
+`git log` はコミット履歴を表示するコマンドですが、末尾にファイルパスを指定することで、そのファイルに関連するコミットだけを絞り込んで表示できます。
 
-**サブツリーの追加**
+さらに `-p` (または `--patch`) オプションを付けると、各コミットでそのファイルにどのような差分が加えられたのかを具体的に確認できます。
+
+**シナリオ**: `config.yml` の変更履歴を時系列で追いたい。
+
 ```bash
-# my-project2 を準備
-git init my-project2 && cd my-project2
-git commit --allow-empty -m "Initial"
+# 演習用リポジトリ
+git init
+echo "version: 1.0" > config.yml && git add . && git commit -m "feat: Initial config"
+echo "debug: false" >> config.yml && git add . && git commit -m "feat: Add debug flag"
+sed -i 's/1.0/1.1/' config.yml && git add . && git commit -m "release: Bump version to 1.1"
 
-# git subtree add コマンドで shared-library を追加
-# --prefixでディレクトリを指定, --squashで履歴を1コミットにまとめる
-git subtree add --prefix=libs ../shared-library main --squash
-```
-このコマンドは、`shared-library`の`main`ブランチの全ファイルを`libs`ディレクトリにコピーし、その履歴を（`--squash`によって）1つのマージコミットとして親リポジトリに追加します。
-
-`.gitmodules`のような特別なファイルは作られません。`libs`ディレクトリは、Gitから見れば他のディレクトリと何ら変わりありません。
-
-**サブツリーを含むリポジトリのクローン**
-
-サブツリーは単なるコピーなので、クローンは通常通りでOKです。
-```bash
-git clone ../my-project2 project2-clone
-ls project2-clone/libs # -> lib.js が存在する
-```
-特別なフラグは不要で、クローンした人は依存関係を意識する必要すらありません。
-
-**サブツリーの更新**
-
-`shared-library`が更新された場合、`subtree pull`で変更を取り込めます。
-```bash
-git subtree pull --prefix=libs ../shared-library main --squash
+# config.yml の履歴と差分を表示
+git log -p -- config.yml
 ```
 
--   **メリット**:
-    -   利用者が依存関係を意識する必要がなく、`git clone`するだけで全てが揃う。
-    -   特別なコマンドが不要で、ワークフローが非常にシンプル。
--   **デメリット**:
-    -   子リポジトリの歴史を親リポジトリに取り込むため、親リポジトリの歴史が複雑になる可能性がある。
-    -   子リポジトリへの変更の貢献（コントリビュート）がサブモジュールに比べて少し煩雑。
+出力結果 (一部抜粋):
+```
+commit <hash3> (HEAD -> main)
+Author: Your Name <you@example.com>
+...
+    release: Bump version to 1.1
+
+diff --git a/config.yml b/config.yml
+--- a/config.yml
++++ b/config.yml
+@@ -1,2 +1,2 @@
+-version: 1.0
++version: 1.1
+ debug: false
+
+commit <hash2>
+...
+```
+このように、`config.yml` に加えられた変更がコミット単位で時系列に表示され、「いつバージョンが 1.1 になり、いつ debug フラグが追加されたのか」が一目瞭然です。
+
+---
+## 35.2 `git blame <file>`: 行単位の変更責任者を特定する
+
+`git log` がファイル全体の歴史を教えてくれるのに対し、`git blame` は**ファイル内の各行が、どのコミットで、誰によって最後に変更されたか**を特定します。これは誰かを「責める (blame)」ためではなく、「このコードの意図を誰に聞けばわかるか」を見つけるためのコマンドです。
+
+**シナリオ**: `config.yml` の `debug` フラグは誰が `false` にしたのか？
+
+```bash
+git blame config.yml
+```
+
+出力結果:
+```
+^<hash1> (Your Name ... 1) version: 1.1
+<hash2> (Your Name ... 2) debug: false
+```
+-   `^<hash1>`: `^` は、その行が最初のコミット (`<hash1>`) で追加されたことを示す。
+-   `<hash2>`: `debug: false` の行は、`<hash2>` のコミットで変更された。
+-   `(Your Name ...)`: 変更者の名前と日時。
+-   `1)`, `2)`: ファイルの行番号。
+
+この結果から、`debug: false` という行は `<hash2>` のコミット (`feat: Add debug flag`) で追加されたことがわかります。さらに詳しく知りたければ `git show <hash2>` でコミットの詳細を確認し、変更の背景にある文脈を深く理解できます。
+
+---
+## 35.3 `git checkout <commit> -- <file>`: 過去のファイルバージョンを復元する
+
+時には、履歴を見るだけでなく、**過去のある時点のファイルそのもの**が必要になることがあります。「間違えて消してしまった設定を復活させたい」「リファクタリング前のロジックと比較したい」といったケースです。
+
+`git checkout` にコミットハッシュとファイルパスを渡すことで、ワーキングディレクトリにその時点のファイルを復元できます。
+
+**シナリオ**: バージョンを `1.0` に戻したい。
+
+`git log -- config.yml` で、バージョンが `1.0` だった最後のコミットは `<hash2>` (`feat: Add debug flag`) だとわかっています。
+
+```bash
+# <hash2> の時点の config.yml をワーキングディレクトリに復元
+git checkout <hash2> -- config.yml
+```
+
+このコマンドを実行すると、ワーキングディレクトリの `config.yml` の中身が `<hash2>` の時点の状態に上書きされます。`git status` を見ると、`config.yml` が変更された状態 (`modified`) になっていることがわかります。
+
+あとは、この復元したファイルをコミットすれば完了です。
+
+```bash
+git add config.yml
+git commit -m "revert: Revert version to 1.0 due to issues"
+```
+
+これにより、プロジェクト全体を巻き戻すことなく、特定のファイルだけを安全に過去の状態に戻すことができました。
 
 ---
 **まとめ**
 
-| 特徴 | Git Submodule | Git Subtree |
-| :--- | :--- | :--- |
-| **依存関係の管理** | リンク (参照) | コピー (マージ) |
-| **クローン方法** | `clone --recurse-submodules` | `clone` (通常通り) |
-| **利用者の手間** | 追加のコマンドが必要 | 不要 |
-| **歴史の分離** | 完全に分離 | 親リポジトリに統合 |
-| **推奨ケース** | 依存バージョンを厳密に管理したい場合。頻繁に更新・貢献する場合。 | 依存関係をシンプルに保ちたい場合。利用者に手間をかけさせたくない場合。 |
+| コマンド                            | 何をするか？                                 | 主な用途                                     |
+| :---------------------------------- | :------------------------------------------- | :------------------------------------------- |
+| `git log -p -- <file>`              | ファイルの変更履歴と差分を一覧する           | ファイル全体の変遷を時系列で理解する         |
+| `git blame <file>`                  | 各行の最終変更者とコミットを特定する         | 特定のコード行の背景や意お図を調査する       |
+| `git checkout <commit> -- <file>`   | ファイルを過去の特定の状態に復元する         | 過去のバージョンの参照、またはファイルの巻き戻し |
 
-どちらの技術も一長一短です。プロジェクトの性質、チームのスキルレベル、依存関係の更新頻度などを考慮して、最適な方法を選択することが重要です。一般的には、迷ったらよりシンプルな**サブツリー**から試してみるのが良いでしょう。
+これらのコマンドは、コードの歴史という広大なデータベースを探索するための強力なツールです。使いこなすことで、デバッグやコードリーディングの効率を飛躍的に向上させることができます。

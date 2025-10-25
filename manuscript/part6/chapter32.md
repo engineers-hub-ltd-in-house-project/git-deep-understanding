@@ -1,116 +1,66 @@
-# 第6部: トラブルシューティングと高度なトピック
+# 第 6 部: Git の便利な道具箱
 
 ---
 
-# 第32章: よくあるエラーと解決法
+# 第 32 章: よくある Git のエラーと解決策
 
-Gitを使っていると、意図しない操作によって予期せぬ状態に陥ることがあります。「ブランチを間違えて消してしまった」「`reset --hard`で作業が消えた」「`detached HEAD`って何？」など、パニックになりがちな状況は数多く存在します。
+Git を使っていると、様々なエラーメッセージに遭遇します。これらは初心者を混乱させることがありますが、そのほとんどは Git がリポジトリの整合性を保つための親切な警告であり、原因と意味を理解すれば怖くありません。
 
-しかし、Gitには強力な安全装置と回復機能が備わっています。その中でも最強のツールが**`reflog`**です。`reflog`は、あなたのリポジトリで`HEAD`が移動したすべての記録を、一定期間保持しています。これは、あなたのローカルリポジトリ専用の「操作履歴」であり、致命的なミスからあなたを救う最後の命綱となります。
-
-この章では、`reflog`を中心に、よくあるトラブルとその回復手順を学びます。
+この章では、開発現場で頻繁に遭遇する代表的なエラーと、その原因、そして安全な解決策を解説します。
 
 ---
-## 32.1 「しまった！ブランチを強制削除してしまった！」 -> `reflog`で復活
+## 32.1 `detached HEAD` state
 
-`git branch -d`はマージ済みのブランチしか削除できませんが、`-D`オプションを使えば、マージされていないブランチも強制的に削除できます。もし間違えて、まだ必要な作業が残っているブランチを`-D`で消してしまったらどうなるでしょうか？
-
-**シナリオ: 重要なブランチを誤って削除**
-```bash
-# 演習用リポジトリ
-git init && cd .git && touch an-empty-file-to-make-main-branch-work && cd .. && git add . && git commit -m "Initial"
-
-# 重要な作業ブランチを作成
-git switch -c very-important-feature
-echo "Secret formula" > secret.txt && git add . && git commit -m "feat: Add secret formula"
-
-# mainに戻る
-git switch main
-
-# 誤ってブランチを強制削除！
-git branch -D very-important-feature
-```
-`git branch`コマンドで確認しても、`very-important-feature`はどこにも見当たりません。コミットは永遠に失われてしまったのでしょうか？
-
-**解決策: `git reflog`でコミットを探し、ブランチを再作成**
-
-ここで`git reflog`の出番です。このコマンドは、あなたの`HEAD`の移動履歴を表示します。
-```bash
-git reflog
-```
-出力結果 (一部抜粋):
-```
-<hash_main> HEAD@{0}: checkout: moving from very-important-feature to main
-<hash_secret> HEAD@{1}: commit: feat: Add secret formula
-<hash_initial> HEAD@{2}: checkout: moving from main to very-important-feature
-...
-```
-`reflog`は、「いつ、どこからどこへ移動したか」を詳細に記録しています。`HEAD@{1}`の行に、失われたはずの「feat: Add secret formula」コミットのハッシュ値(`<hash_secret>`)が残っているのがわかります。
-
-コミットさえ見つかれば、そこからブランチを復活させるのは簡単です。
-```bash
-git branch very-important-feature <hash_secret>
-```
-これで、`very-important-feature`ブランチが、失われる直前の状態で完全に復活しました。`reflog`のおかげで、致命的なミスは完全に回避されました。
+- **エラーメッセージ**: `You are in 'detached HEAD' state.`
+- **状況**: `git switch <commit-hash>` や `git switch <tag-name>` のように、ブランチ名以外のものをチェックアウトしたときに発生します。
+- **原因**: `HEAD` が特定のブランチを指すのではなく、歴史の中の一つのコミットを**直接指している**状態です。これは、過去の特定の時点のコードを一時的に確認するための「読み取り専用」モードのようなものです。
+- **問題点**: この状態で新しいコミットを作成すると、そのコミットはどのブランチにも属さないため、後で別のブランチに切り替えた瞬間に見失ってしまいます (いずれガベージコレクションで削除されます)。
+- **解決策**:
+    - **単に過去のコードを確認したかっただけの場合**: `git switch <branch-name>` (例: `git switch main`) を実行して、通常のブランチに戻れば OK です。
+    - **この時点から新しい作業を始めたい場合**: `git switch -c <new-branch-name>` を実行します。これにより、現在の `HEAD` が指すコミットを起点とした新しいブランチが作成され、`detached HEAD` 状態は解消されます。
 
 ---
-## 32.2 「しまった！`reset --hard`でコミットが消えた！」 -> `reflog`で時間を巻き戻す
+## 32.2 `non-fast-forward` (Push rejected)
 
-`git reset --hard`は、指定したコミットの状態にインデックスと作業ディレクトリを完全に一致させる、強力かつ危険なコマンドです。もし間違ったコミットに戻してしまったら、それ以降のコミットは歴史から消え去ったように見えます。
-
-**シナリオ: `reset --hard`で未来のコミットを消してしまう**
-```bash
-git init
-echo "C1" > file.txt && git add . && git commit -m "C1"
-echo "C2" >> file.txt && git add . && git commit -m "C2"
-
-# この時点で C1 -> C2 という歴史
-
-# 誤って最初のコミットにハードリセットしてしまう
-git reset --hard HEAD~1
-```
-`git log`を見ると`C1`のコミットしか見えません。`C2`はどこに行ったのでしょうか？
-
-**解決策: `reflog`でリセット前の状態に戻る**
-```bash
-git reflog
-```
-出力結果:
-```
-<hash_c1> HEAD@{0}: reset: moving to HEAD~1
-<hash_c2> HEAD@{1}: commit: C2
-<hash_c1> HEAD@{2}: commit (initial): C1
-```
-`HEAD@{1}`に、`reset`する直前の`C2`の状態が記録されています。このハッシュ値を使えば、`reset`する前の状態に`reset`し直すことができます。
-```bash
-git reset --hard <hash_c2>
-```
-これで、`C2`のコミットが再び歴史に現れ、作業ディレクトリの状態も元通りになりました。
+- **エラーメッセージ**: `! [rejected] main -> main (non-fast-forward)`
+- **状況**: `git push` を実行したとき。
+- **原因**: Part5 で学んだ通り、あなたのローカルリポジトリがリモートリポジトリの最新の状態を反映していないことが原因です。あなたが最後に `fetch` (または `pull`) してから、他の誰かが同じブランチに新しいコミットを `push` したため、歴史が分岐しています。Git は、リモートのコミットが失われる可能性のある `push` を安全のために拒否します。
+- **解決策**:
+    1.  `git fetch origin` を実行して、リモートの最新の変更をリモート追跡ブランチ (`origin/main`) に取り込みます。
+    2.  `git log main..origin/main` で、どのような変更があったかを確認します。
+    3.  `git merge origin/main` または `git rebase origin/main` を使って、リモートの変更をローカルのブランチに統合します。
+    4.  コンフリクトが発生した場合は解決します。
+    5.  再度 `git push origin main` を実行します。今度は Fast-forward なので成功するはずです。
 
 ---
-## 32.3 「`detached HEAD`状態になった！」 -> ブランチを作って解決
+## 32.3 `Merge conflict in <file>`
 
-第12章でも触れましたが、`detached HEAD`（分離HEAD）は、ブランチではなく特定のコミットを直接チェックアウトしたときに発生する状態です。`git checkout <commit-hash>`などを実行するとこの状態になります。
+- **エラーメッセージ**: `CONFLICT (content): Merge conflict in <filename>`
+- **状況**: `git merge`, `git pull`, `git rebase`, `git cherry-pick` などを実行したとき。
+- **原因**: マージしようとしている 2 つのブランチ (またはコミット) で、同じファイルの同じ箇所が異なる内容に変更されており、Git がどちらを優先すべきか自動で判断できない状態です。
+- **解決策**:
+    1.  `git status` を実行して、コンフリクトが発生しているファイルを確認します。
+    2.  コンフリクトしたファイルをエディタで開きます。
+    3.  `<<<<<<< HEAD`, `=======`, `>>>>>>>` のようなコンフリクトマーカーを探し、どちらの変更を残すか、あるいは両方をどのように統合するかを判断して、ファイルを**手動で編集**します。最終的にコンフリクトマーカーはすべて削除します。
+    4.  編集が完了したら、`git add <filename>` を実行して、コンフリクトが解決したことを Git に伝えます。
+    5.  `git commit` (マージの場合) または `git rebase --continue` (リベースの場合) を実行して、プロセスを完了させます。
 
-この状態で新しいコミットを作成すること自体は可能ですが、その後で別のブランチに切り替えてしまうと、新しいコミットを指すポインタがなくなり、いずれGitのガベージコレクションによって削除されてしまう可能性があります。
+---
+## 32.4 `The following untracked working tree files would be overwritten...`
 
-**解決策: 現在の場所に新しいブランチを作成する**
-
-`detached HEAD`はエラーではありません。Gitが「あなたは今、ブランチという名前札のない、ただのコミットの上に直接いますよ」と教えてくれているだけです。
-
-もしその場所で作業を続けたいのであれば、その場所に新しい名前札、つまり**ブランチ**を作ってあげれば解決します。
-```bash
-# 現在地から新しいブランチを作成して、そちらに切り替える
-git switch -c new-feature-branch
-```
-たったこれだけで、`detached HEAD`状態は解消され、あなたの作業は`new-feature-branch`という名前で安全に保護されます。
+- **エラーメッセージ**: `error: The following untracked working tree files would be overwritten by checkout: ...`
+- **状況**: `git switch`, `git pull` など、作業ディレクトリのファイルを書き換える可能性のあるコマンドを実行したとき。
+- **原因**: あなたが新しく作成したり変更したりしたファイルが、まだ Git の追跡対象になっていない (一度も `add` されていない) 状態で、実行しようとしているコマンド (例: `git switch feature-A`) によって、同じ名前のファイルが別の内容で作成されようとしている状態です。Git は、あなたの追跡されていない作業内容が失われるのを防ぐために、コマンドの実行を停止します。
+- **解決策**:
+    - **そのファイルが必要な場合**: `git add <filename>` と `git commit` を使ってコミットするか、`git stash` を使って一時的に退避させます。
+    - **そのファイルが不要な場合**: `rm <filename>` でファイルを削除します。
 
 ---
 **まとめ**
 
-この章では、開発現場で頻繁に遭遇するトラブルとその解決法を学びました。
--   **`git reflog`は最強の安全網**: ブランチの削除や`reset --hard`といった破壊的な操作で失われたと思われたコミットも、`reflog`を辿ればほとんどの場合救出できる。
--   `reflog`はあくまで**ローカルの記録**: `push`していないコミットの回復には絶大な力を発揮しますが、リモートリポジトリには`reflog`は存在しません。
--   **`detached HEAD`は怖くない**: 単にブランチを作って名前をつけてあげるだけで、安全な状態に戻ることができる。
-
-これらの知識があれば、Gitの操作で少しミスをしても、冷静に、そして確実に対処することができます。
+- Git のエラーメッセージは、リポジトリを破壊から守るための**セーフティネット**である。
+- メッセージを注意深く読めば、ほとんどの場合、原因と解決策のヒントが書かれている。
+- `detached HEAD`: コミットを直接チェックアウトしている状態。新しいブランチを作る (`git switch -c`) か、既存のブランチに戻る (`git switch main`)。
+- `non-fast-forward`: リモートが先に進んでいる。`fetch` してマージ/リベースしてから `push` する。
+- `Merge conflict`: 変更が衝突している。手動でファイルを編集し、`add` してからプロセスを続行する。
+- `Untracked files would be overwritten`: 追跡されていないファイルが上書きされそうになっている。コミットするか、退避 (`stash`) するか、削除する。

@@ -1,4 +1,4 @@
-# 第11章: `git log` で履歴を確認
+# 第 11 章: `git log` で履歴を確認
 
 `git add` でインデックスを更新し、`git commit` でリポジトリに歴史を刻み、`git status` で現在地を確認する。このサイクルを回していくと、リポジトリにはコミットが積み重なっていきます。この積み重なった歴史を旅するためのコマンドが `git log` です。
 
@@ -7,7 +7,7 @@
 1.  指定された始点（デフォルトでは `HEAD`）からスタートします。
 2.  そのコミットの情報を表示します。
 3.  そのコミットが持つ `parent` ポインタを辿り、親コミットに移動します。
-4.  歴史の始まり（親を持たない最初のコミット）にたどり着くまで、2と3を繰り返します。
+4.  歴史の始まり（親を持たない最初のコミット）にたどり着くまで、2 と 3 を繰り返します。
 
 この章では、この基本的な動きを理解した上で、`git log` をより強力な歴史分析ツールに変えるための様々なオプションを見ていきましょう。
 
@@ -36,7 +36,7 @@ git log
 ```
 出力結果（例）:
 ```
-commit a1b2c3d... (HEAD -> master)
+commit a1b2c3d... (HEAD -> main)
 Author: Your Name <you@example.com>
 Date:   ...
 
@@ -50,17 +50,17 @@ Date:   ...
 
 ...
 ```
-これらはすべて、第5章で学んだ `commit` オブジェクトのメタデータそのものです。
+これらはすべて、第 5 章で学んだ `commit` オブジェクトのメタデータそのものです。
 
 ### `--oneline` と `--graph`
 
-最もよく使われるオプションの一つが `--oneline` です。コミットを1行に要約して表示してくれます。
+最もよく使われるオプションの一つが `--oneline` です。コミットを 1 行に要約して表示してくれます。
 ```bash
 git log --oneline
 ```
 出力結果（例）:
 ```
-a1b2c3d (HEAD -> master) v3
+a1b2c3d (HEAD -> main) v3
 e4f5g6h v2
 i7j8k9l v1
 ```
@@ -72,8 +72,8 @@ git branch feature
 git checkout feature
 echo "feature" > feature.txt && git add . && git commit -m "add feature"
 
-# masterに戻ってマージ
-git checkout master
+# mainに戻ってマージ
+git checkout main
 git merge --no-ff feature -m "merge feature"
 
 # グラフ付きでログを表示
@@ -81,7 +81,7 @@ git log --oneline --graph
 ```
 出力結果（例）:
 ```
-*   b1c2d3e (HEAD -> master) merge feature
+*   b1c2d3e (HEAD -> main) merge feature
 |\  
 | * f2g3h4i (feature) add feature
 |/  
@@ -92,7 +92,7 @@ git log --oneline --graph
 
 ### `--pretty=format:"..."` (カスタムフォーマット)
 
-`--pretty=format` を使えば、出力を完全に自作できます。これは、Gitの内部データを直接扱っている感覚を味わえる強力なオプションです。
+`--pretty=format` を使えば、出力を完全に自作できます。これは、Git の内部データを直接扱っている感覚を味わえる強力なオプションです。
 
 ```bash
 git log --pretty=format:"%h %an, %ar: %s"
@@ -105,8 +105,8 @@ a1b2c3d Your Name, 7 minutes ago: v3
 ...
 ```
 - `%h`: 短縮されたコミットハッシュ
-- `%an`: Author名
-- `%ar`: Authorの日付 (相対的)
+- `%an`: Author 名
+- `%ar`: Author の日付 (相対的)
 - `%s`: コミットメッセージの件名
 
 このように、`commit` オブジェクトが持つ情報を自由に組み合わせて表示できます。
@@ -117,7 +117,7 @@ a1b2c3d Your Name, 7 minutes ago: v3
 `git log` は、ただ表示するだけでなく、特定の条件に合致するコミットだけを絞り込んで表示することもできます。
 
 ### `-n <数>` (数で絞り込む)
-直近のN件のコミットだけを表示します。
+直近の N 件のコミットだけを表示します。
 ```bash
 git log -n 3
 ```
@@ -151,7 +151,7 @@ git log file.txt
 # src/ ディレクトリに関連するコミットだけを表示
 git log src/
 ```
-これは、特定のファイルの変更履歴を追跡する際に非常に便利です。Gitは各コミットの`tree`とその親の`tree`を比較することで、どのファイルが変更されたかを判断し、このフィルタリングを実現しています。
+これは、特定のファイルの変更履歴を追跡する際に非常に便利です。Git は各コミットの `tree` とその親の `tree` を比較することで、どのファイルが変更されたかを判断し、このフィルタリングを実現しています。
 
 ---
 **まとめ**

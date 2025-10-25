@@ -1,131 +1,118 @@
-# 第29章: Pull Requestの完全ワークフロー
-
-これまでの章で、Gitのローカルでの操作、そしてリモートリポジトリとの通信方法を学びました。理論上は、`main`ブランチで作業し、それを`git push`すればチームとコードを共有できます。しかし、なぜ実際の開発現場では、わざわざ`feature`ブランチを作り、**Pull Request（プルリクエスト、PR）** という一手間をかけるのでしょうか？
-
-答えは**品質とコミュニケーション**のためです。Pull Requestは、あなたの変更点を本流にマージする前に、
--   チームメンバーに変更内容を通知し、
--   コードレビューを通じて潜在的なバグや設計の問題点を議論し、
--   自動テストをパスしていることを確認する
-
-ための「関所」の役割を果たします。これにより、`main`ブランチは常に安定した、品質の高い状態に保たれます。Pull Requestは、Gitのコマンドではなく、GitHubやGitLabといったプラットフォームが提供する、チーム開発を円滑にするための**文化**であり**プロセス**なのです。
-
-この章では、架空のシナリオを通じて、Pull Requestが作成され、レビューされ、マージされるまでの一連の流れを追いかけます。
+# 第 29 章: GitHub ワークフロー: Pull Request の実践
 
 ---
-## 29.1 Pull Requestのライフサイクル
 
-Pull Requestの典型的なライフサイクルは、以下のステップで構成されます。
-1.  **ブランチの作成とPush**: ローカルで`feature`ブランチを作成し、変更をコミットしてリモートに`push`する。
-2.  **Pull Requestの作成**: GitHub上で、`feature`ブランチから`main`ブランチへの変更の取り込みを依頼する。
-3.  **レビューとディスカッション**: レビュアーがコードを確認し、コメントや修正依頼を行う。
-4.  **修正と再Push**: PRの作成者がフィードバックを元にコードを修正し、同じ`feature`ブランチに`push`する。（PRは自動的に更新される）
-5.  **承認とマージ**: レビューが完了し、変更が承認されたら、リポジトリの管理者がPRを`main`ブランチにマージする。
-6.  **後片付け**: マージ済みの`feature`ブランチをローカルとリモートで削除する。
+ここまでの章で学んだリモートリポジトリの仕組み (`remote`, `fetch`, `push`) は、**GitHub** に代表されるプラットフォーム上で、チームが効果的に協力するための技術的な土台となります。
+
+現代の多くの開発チームでは、**Pull Request (プルリクエスト)** または **Merge Request (マージリクエスト)** と呼ばれる仕組みをワークフローの中心に据えています。これは、単にコードをマージするだけでなく、**コードレビュー**や**自動テスト**、**議論**といったコラボレーションのプロセスを円滑に進めるための非常に強力な機能です。
+
+この章では、GitHub を使った最も一般的で基本的なワークフローを、具体的な手順に沿って実践します。
 
 ---
-## 29.2 実践ワークフロー
+## 29.1 Pull Request ワークフローの全体像
 
-それでは、このライフサイクルを実際に体験してみましょう。
+GitHub ワークフローは、一般的に以下のステップで構成されます。
 
-### ステップ1: ブランチの作成とPush (PR作成者)
+1.  **Issue (課題) の確認**: これから取り組むタスク (機能追加、バグ修正など) が Issue として GitHub 上に登録されていることを確認します。
+2.  **ブランチの作成**: `main` (または `develop`) ブランチから、作業内容が分かりやすい名前の**フィーチャーブランチ**をローカルに作成します。(例: `feature/add-login-page`)
+3.  **実装とコミット**: ローカルでコードを書き、小さな単位でコミットを積み重ねます。
+4.  **Push**: 作成したフィーチャーブランチを、ローカルからリモート (GitHub) に `push` します。
+5.  **Pull Request の作成**: GitHub 上で、`push` したフィーチャーブランチから `main` ブランチへのマージを依頼する Pull Request (PR) を作成します。
+6.  **コードレビューと議論**: 他のチームメンバーが PR を確認し、コードに対するコメントや質問、改善提案などを行います。必要に応じて、指摘を修正し、再度 `push` します。
+7.  **マージ**: レビューで承認 (Approve) されたら、PR を `main` ブランチにマージします。多くの場合、GitHub 上のボタンをクリックするだけで安全にマージが実行されます。
+8.  **ブランチの削除**: マージが完了したら、不要になったフィーチャーブランチをリモートとローカルの両方から削除し、クリーンな状態を保ちます。
 
-まず、リモートリポジトリと、あなたのローカルリポジトリを準備します。
+---
+## 29.2 実践: はじめての Pull Request
+
+それでは、簡単なシナリオに沿って、このワークフローを体験してみましょう。
+
+**シナリオ**: プロジェクトの `README.md` に、プロジェクトの概要説明を追加する。
+
+### Step 1 & 2: ブランチの作成
+
+まず、最新の `main` ブランチから作業用のブランチを作成します。
+
 ```bash
-# リモートリポジトリ
-git init --bare ../pr-workflow.git
+# 最新のリモートの状態を取得
+git fetch origin
 
-# ローカルリポジトリ
-git clone ../pr-workflow.git my-repo && cd my-repo
-echo "Initial file" > file.txt && git add . && git commit -m "Initial"
-git push origin main
+# mainブランチを最新の状態に更新
+git switch main
+git merge origin/main
+
+# フィーチャーブランチを作成して移動
+git switch -c feature/add-readme-description
 ```
-あなたは新しい機能「hello world機能」を実装することになりました。まず、最新の`main`から`feature/hello`ブランチを作成します。
-```bash
-git switch -c feature/hello main
-echo "console.log('hello world');" > hello.js
-git add .
-git commit -m "feat: Add hello world function"
+
+### Step 3: 実装とコミット
+
+`README.md` ファイルを編集して、説明文を追加します。
+```markdown
+# My Awesome Project
+
+This is a sample project to demonstrate the GitHub workflow.
 ```
-ここで重要なのは、**Pushする前に履歴をきれいにすること**です。第4部で学んだインタラクティブリベースを使い、コミットを意味のある単位にまとめ、メッセージを分かりやすくしておきましょう。（今回は1コミットなので不要です）
-
-準備ができたら、このブランチをリモートに`push`します。
+変更をコミットします。
 ```bash
-git push origin feature/hello
+git add README.md
+git commit -m "docs: Add project description to README"
 ```
-`push`が成功すると、ターミナルに「Create a pull request for 'feature/hello' on GitHub by visiting: ...」というURLが表示されることがあります。このURLにアクセスするのがPR作成の近道です。
 
-### ステップ2: Pull Requestの作成 (PR作成者)
+### Step 4: Push
 
-GitHubのサイトに行き、リポジトリのページを開くと、「`feature/hello` had recent pushes」という通知と共に「Compare & pull request」という緑色のボタンが表示されています。これをクリックします。
+作成したブランチをリモートリポジトリに `push` します。
+初めてそのブランチを `push` する際は、`--set-upstream` (または `-u`) オプションを付けると、ローカルブランチとリモートブランチが紐付けられ、次回から `git push` だけで `push` できるようになります。
 
-PR作成画面では、以下の項目を記述します。
--   **Title**: PRの目的が簡潔にわかるタイトル。（例: `feat: HELLO WORLD機能を追加`）
--   **Description**: なぜこの変更が必要なのか、何をしたのか、どうやってテストしたのか、レビューしてほしい観点などを詳しく記述します。良いPRの डिस्क्रिप्शンは、レビューの質を大きく左右します。
-
-記述したら、「Create pull request」ボタンを押します。これで、あなたの変更提案がチームに公開されました。
-
-### ステップ3 & 4: レビューと修正 (レビュアー & PR作成者)
-
-チームメンバーは、このPRの通知を受け取ります。GitHubの「Files changed」タブを開き、あなたのコードの変更点一行一行に対してコメントをすることができます。
-
-**レビュアー**: 「`console.log`ではなく、`return`で文字列を返す関数にして、テストしやすくしませんか？」
-
-あなたはこのフィードバックを受け、ローカルの`feature/hello`ブランチでコードを修正します。
 ```bash
-# feature/hello ブランチにいることを確認
-# hello.js を以下のように修正
-# const hello = () => 'hello world';
-# module.exports = hello;
-
-git add hello.js
-git commit -m "refactor: Return a string instead of logging"
+git push --set-upstream origin feature/add-readme-description
 ```
-修正が完了したら、**同じブランチに再度push**します。
-```bash
-git push origin feature/hello
+
+### Step 5: Pull Request の作成
+
+`push` が成功すると、ターミナルに以下のようなメッセージが表示されることが多いです。
 ```
-これにより、既存のPRが自動的に新しいコミットを含んだ状態で更新されます。レビュアーはあなたの修正を再度確認できます。
+remote: Create a pull request for 'feature/add-readme-description' on GitHub by visiting:
+remote:   https://github.com/your-username/your-repo/pull/new/feature/add-readme-description
+```
+この URL にアクセスするか、GitHub のリポジトリページに行くと、「`feature/add-readme-description` had recent pushes」という通知と共に "Compare & pull request" ボタンが表示されています。
 
-### ステップ5: 承認とマージ (リポジトリ管理者)
+このボタンをクリックすると、Pull Request 作成画面が開きます。
+- **Title**: PR の目的が簡潔にわかるタイトルを付けます。(通常はコミットメッセージから自動入力されます)
+- **Description**: なぜこの変更が必要なのか、どのような変更を加えたのか、レビューしてほしい点などを詳しく記述します。関連する Issue があれば、`#<issue-number>` のように書くとリンクできます。
 
-レビュアーが「LGTM (Looks Good To Me)」とコメントし、変更をApprove（承認）します。
-すべてのレビューが完了したら、リポジトリの管理者が緑色の「Merge pull request」ボタンを押します。
+内容を記述したら、"Create pull request" ボタンをクリックします。
 
-GitHubのマージボタンには通常3つの選択肢があります。
--   **Create a merge commit**: 通常の`git merge`と同じ。`feature`ブランチの歴史をマージコミットとして`main`に残す。
--   **Squash and merge**: PRの全コミットを1つにまとめてから`main`にマージする。`main`の歴史がクリーンに保たれる。
--   **Rebase and merge**: `feature`ブランチの全コミットを`main`の先端にリベースしてからマージする。`main`の歴史が一直線になる。
+### Step 6 & 7: レビューとマージ
 
-チームのルールに従ってマージ方法を選択し、「Confirm merge」を押せば、あなたの変更が晴れて`main`ブランチに統合されます。
+PR が作成されると、チームメンバーに通知が飛びます。
+メンバーは "Files changed" タブでコードの差分を確認し、特定の行にコメントを残すことができます。
 
-### ステップ6: 後片付け (全員)
+もし修正依頼があれば、ローカルの `feature/add-readme-description` ブランチでコードを修正し、再度コミットして `push` します。`push` されたコミットは自動的に同じ PR に追加されます。
 
-マージが完了すると、GitHubは不要になったリモートの`feature/hello`ブランチを削除するボタンを表示してくれるので、クリックして削除します。
+議論が終わり、レビュアーから "Approve" (承認) をもらったら、"Merge pull request" ボタンをクリックしてマージを実行します。
 
-最後に、あなたのローカル環境もきれいにします。
+### Step 8: ブランチの削除
+
+マージ後、GitHub 上でブランチを削除するボタンが表示されるので、クリックしてリモートブランチを削除します。
+その後、ローカルでも不要になったブランチを削除し、次の作業に備えます。
+
 ```bash
-# mainブランチに切り替え
+# mainブランチに戻る
 git switch main
 
-# リモートの最新のmain（あなたの変更が含まれている）を取得
-git pull origin main
+# リモートで削除されたブランチの情報をローカルに反映
+git fetch --prune
 
-# 不要になったローカルのfeatureブランチを削除
-git branch -d feature/hello
+# ローカルブランチを削除
+git branch -d feature/add-readme-description
 ```
-これで、一つの機能開発サイクルが完了しました。
+`--prune` オプションは、リモートで既に存在しない追跡ブランチをローカルから削除してくれる便利なオプションです。
 
 ---
 **まとめ**
 
-この章では、GitHubを舞台としたPull Requestの完全なワークフローを体験しました。
--   Pull Requestは、コードの品質を担保し、チームのコミュニケーションを促進するための中心的なプロセスである。
--   **Branch -> Commit -> Push -> Create PR -> Review -> Update -> Merge -> Cleanup** という一連のサイクルで開発が進む。
--   PRへの修正は、同じブランチに新しいコミットを追加して`push`するだけで自動的に反映される。
--   PRは、Gitのコマンドの上に構築された、より高度な共同作業のための文化であり、現代の開発に不可欠なスキルである。
-
-最後に演習用ディレクトリを削除しておきましょう。
-```bash
-cd ..
-rm -rf pr-workflow.git my-repo
-```
+- Pull Request は、コードの変更をチームのメインブランチに統合するための、**提案**であり、**コミュニケーションの場**である。
+- `main` ブランチを常に安定した状態に保ちつつ、フィーチャーブランチで安全に開発を進めることができる。
+- コードレビューのプロセスを挟むことで、コードの品質向上、知識の共有、チーム全体のスキルアップに繋がる。
+- この **Branch -> Push -> Pull Request -> Review -> Merge** という一連の流れは、現代的なチーム開発における最も標準的で効果的なワークフローである。
